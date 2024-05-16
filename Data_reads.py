@@ -197,12 +197,12 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                             vrzz[ii, jj, :] = np.interp(
                                 retz, hgt, vrxx[ii, jj, :], left=-999, right=-999)
 
-                        temp_sig = Other_functions.wind_estimate(
-                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'])
+                        temp_sig, thresh_sig = Other_functions.wind_estimate(
+                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
                         vr_varzz[ii, :, :] = temp_sig[None, :]
 
-                    #foo = np.where(vr_varzz > 90000)
-                    #vrzz[foo] = -999
+                    foo = np.where(vr_varzz > 90000)
+                    vrzz[foo] = -999
 
                     vrxx = np.copy(vrzz)
                     vr_varxx = np.copy(vr_varzz)
@@ -355,10 +355,13 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                             vrzz[ii, jj, :] = np.interp(
                                 retz, hgt, vrxx[ii, jj, :], left=-999, right=-999)
 
-                        temp_sig = Other_functions.wind_estimate(
-                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'])
+                        temp_sig, thresh_sig = Other_functions.wind_estimate(
+                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
                         vr_varzz[ii, :, :] = temp_sig[None, :]
 
+                    foo = np.where(vr_varzz > 90000)
+                    vrzz[foo] = -999
+                    
                     vrxx[np.isnan(vrxx)] = -999
                     vr_varxx[np.isnan(vr_varxx)] = -999
 
@@ -521,10 +524,14 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                         vrzz[ii, :] = np.interp(
                             retz, hgt, vrxx[ii, :], left=-999, right=-999)
 
-                    temp_sig = Other_functions.wind_estimate(
-                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'])
+                    temp_sig, thresh_sig = Other_functions.wind_estimate(
+                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
+                    
                     vr_varzz[:, :] = temp_sig[None, :]
 
+                    foo = np.where(vr_varzz > 90000)
+                    vrzz[foo] = -999
+                    
                     vrxx = np.copy(vrzz)
                     vr_varxx = np.copy(vr_varzz)
 
@@ -664,11 +671,13 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                             vrzz[ii, jj, :] = np.interp(
                                 retz, hgt, vrxx[ii, jj, :], left=-999, right=-999)
 
-                        temp_sig = Other_functions.wind_estimate(
-                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'])
+                        temp_sig, thresh_sig = Other_functions.wind_estimate(
+                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
                         vr_varzz[ii, :, :] = temp_sig[None, :]
 
-
+                    foo = np.where(vr_varzz > 90000)
+                    vrzz[foo] = -999
+                    
                     vrxx = np.copy(vrzz)
                     vr_varxx = np.copy(vr_varzz)
 
@@ -830,10 +839,13 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                         vrzz[ii, :] = np.interp(
                             retz, hgt, vrxx[ii, :], left=-999, right=-999)
 
-                    temp_sig = Other_functions.wind_estimate(
-                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'])
+                    temp_sig, thresh_sig = Other_functions.wind_estimate(
+                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
                     vr_varzz[:, :] = temp_sig[None, :]
 
+                    foo = np.where(vr_varzz > 90000)
+                    vrzz[foo] = -999
+                    
                     vrxx = np.copy(vrzz)
                     vr_varxx = np.copy(vr_varzz)
 
@@ -1865,7 +1877,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
                         verr_interp = 1.0
 
                     # This is all 10-m data
-                    z_interp = np.array([0.01])
+                    z_interp = np.array([retz[0]])
 
                     u_interp = np.array([u_interp])
                     v_interp = np.array([v_interp])
@@ -1957,7 +1969,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
                     verr_interp = np.nanstd(vxx)
 
                     # This is all 10-m data
-                    z_interp = np.array([0.01])
+                    z_interp = np.array([retz[0]])
 
                     u_interp = np.array([u_interp])
                     v_interp = np.array([v_interp])
@@ -2006,8 +2018,8 @@ def read_insitu(date, retz, rtime, vip, verbose):
                     ux = fid.variables['u'][:]
                     vx = fid.variables['v'][:]
 
-                    ux_sigma = fid.variables['u_sigma'][:]
-                    vx_sigma = fid.variables['v_sigma'][:]
+                    ux_sigma = np.ones_like(z) * 5
+                    vx_sigma = np.ones_like(z) * 5
 
                     fid.close()
                     
@@ -2229,7 +2241,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
                     verr_interp = np.nanstd(vxx)
 
                     # This is all 10-m data
-                    z_interp = np.array([0.01])
+                    z_interp = np.array([retz[0]])
 
                     u_interp = np.array([u_interp])
                     v_interp = np.array([v_interp])
@@ -2245,7 +2257,182 @@ def read_insitu(date, retz, rtime, vip, verbose):
                     v_interp = None
                     uerr_interp = None
                     verr_interp = None
-                    z_interp = None  
+                    z_interp = None
+        if vip['insitu_type'][k] == 6:
+            if verbose >= 1:
+                print('Reading in windsonde data')
+
+            dates = [(datetime.strptime(str(date), '%Y%m%d') - timedelta(days=1)).strftime('%Y%m%d'),
+                     str(date),  (datetime.strptime(str(date), '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')]
+
+            files = []
+            for i in range(len(dates)):
+                files = files + \
+                    sorted(glob.glob(vip['insitu_paths']
+                           [k] + '/' + '*' + dates[i] + '*.csv'))
+
+            files.sort()
+            if len(files) == 0:
+                if verbose >= 1:
+                    print('No windsonde data files found in this directory for this date')
+                u_interp = None
+                v_interp = None
+                uerr_interp = None
+                verr_interp = None
+            else:
+                for i in range(len(files)):
+                    date, time, z, dir, spd = np.loadtxt(files[i], delimiter = ',', usecols = [0, 2, 6, 11, 12], unpack = True, dtype = str, skiprows = 1)
+                    
+                    # convert the date/times to epochtime
+                    epoch = (datetime.strptime(date[0] + time[0], '%Y-%m-%d%H:%M:%S') - datetime(1970,1,1)).total_seconds()
+
+                    # mask missing data as nan
+                    spd[spd == ''] = np.nan
+                    dir[np.isnan(spd.astype('f')) == True] = np.nan
+                    
+                    # convert data to float and format properly before interpolation 
+                    z = z.astype('f')/1000.
+                    ux = -1 * spd.astype('f') * np.sin(dir.astype('f') * (np.pi/180))
+                    vx = -1 * spd.astype('f') * np.cos(dir.astype('f') * (np.pi/180))
+
+                    ux_sigma = np.ones_like(z) * 6
+                    vx_sigma = np.ones_like(z) * 6
+                    
+                    # We need this data interpolated to the retrieval heights
+                    f = interpolate.interp1d(
+                        z, ux, bounds_error=False, fill_value=np.nan)
+                    u_interp = f(np.copy(retz))
+
+                    f = interpolate.interp1d(
+                        z, vx, bounds_error=False, fill_value=np.nan)
+                    v_interp = f(np.copy(retz))
+
+                    f = interpolate.interp1d(
+                        z, ux_sigma, bounds_error=False, fill_value=np.nan)
+                    uerr_interp = f(np.copy(retz))
+
+                    f = interpolate.interp1d(
+                        z, vx_sigma, bounds_error=False, fill_value=np.nan)
+                    verr_interp = f(np.copy(retz))
+                    
+                    if no_data:
+                        secs = epoch
+                        uxx = np.array([u_interp])
+                        vxx = np.array([v_interp])
+                        uxx_sigma = np.array([uerr_interp])
+                        vxx_sigma = np.array([verr_interp])
+                        no_data = False
+                    else:
+                        secs = np.append(secs, epoch)
+                        uxx = np.vstack((uxx, u_interp))
+                        vxx = np.vstack((vxx, v_interp))
+                        uxx_sigma = np.vstack((uxx_sigma, uerr_interp))
+                        vxx_sigma = np.vstack((vxx_sigma, verr_interp))
+                
+                if not no_data:
+                    
+                    # Now find the profiles closest before and after the retrieval time
+                    foo_before = np.where(secs <= rtime)[0]
+                    foo_after = np.where(secs > rtime)[0]
+                    z_interp = np.copy(retz)
+
+                    # No sounding data before retrieval time
+                    if len(foo_before) == 0:
+
+                        # No sounding data after retrieval time either. This is weird
+                        if len(foo_after) == 0:
+                            print('Something really weird is happening in windsonde read.')
+                            print('No windsonde data used for this time')
+                            u_interp = None
+                            v_interp = None
+                            uerr_interp = None
+                            verr_interp = None
+                            z_interp = None
+
+                        # We have sounding data after the retrieval time but not before
+                        else:
+                            after_sec = secs[foo_after[0]]
+                            if after_sec > rtime+(vip['insitu_timedelta'][k]/2)*60:
+                                print('No windsonde data with in timedelta for this time.')
+                            else:
+                                u_interp = uxx[foo_after[0], :]
+                                v_interp = vxx[foo_after[0], :]
+                                uerr_interp = uxx_sigma[foo_after[0], :]
+                                verr_interp = vxx_sigma[foo_after[0], :]
+
+                                u_interp[np.isnan(u_interp)] = -999.
+                                v_interp[np.isnan(v_interp)] = -999.
+                                uerr_interp[np.isnan(uerr_interp)] = -999.
+                                verr_interp[np.isnan(verr_interp)] = -999.
+
+                                foo = np.where(u_interp != -999)[0]
+
+                                if len(foo) > 0:
+                                    available[k] = 1
+                                else:
+                                    print('No valid windsonde data found')
+
+                    else:
+                        # We have sounding data before the retrieval time, but not after
+                        if len(foo_after) == 0:
+                            before_sec = secs[foo_before[-1]]
+
+                            if before_sec < rtime-(vip['insitu_timedelta'][k]/2)*60:
+                                print('No windsonde data with in timedelta for this time.')
+                            else:
+                                u_interp = uxx[foo_before[-1], :]
+                                v_interp = vxx[foo_before[-1], :]
+                                uerr_interp = uxx_sigma[foo_before[-1], :]
+                                verr_interp = vxx_sigma[foo_before[-1], :]
+
+                                u_interp[np.isnan(u_interp)] = -999.
+                                v_interp[np.isnan(v_interp)] = -999.
+                                uerr_interp[np.isnan(uerr_interp)] = -999.
+                                verr_interp[np.isnan(verr_interp)] = -999.
+
+                                foo = np.where(u_interp != -999)[0]
+
+                                if len(foo) > 0:
+                                    available[k] = 1
+                                else:
+                                    print('No valid windsonde data found')
+
+                        else:
+                            # print(foo_before, foo_after, uxx.shape)
+                            # We have data before and after the retrieval time so interpolate the data in time
+                            f = interpolate.interp1d(secs[foo_before[-1]:foo_after[0]+1], uxx[foo_before[-1]:foo_after[0]+1], axis=0, bounds_error=False, fill_value=np.nan)
+                            u_interp = f(rtime)
+
+                            f = interpolate.interp1d(secs[foo_before[-1]:foo_after[0]+1], vxx[foo_before[-1]:foo_after[0]+1], axis=0, bounds_error=False, fill_value=np.nan)
+                            v_interp = f(rtime)
+
+                            f = interpolate.interp1d(secs[foo_before[-1]:foo_after[0]+1], uxx_sigma[foo_before[-1]:foo_after[0]+1], axis=0, bounds_error=False, fill_value=np.nan)
+                            uerr_interp = f(rtime)
+
+                            f = interpolate.interp1d(secs[foo_before[-1]:foo_after[0]+1], vxx_sigma[foo_before[-1]:foo_after[0]+1], axis=0, bounds_error=False, fill_value=np.nan)
+                            verr_interp = f(rtime)
+
+                            foo = np.where(u_interp != -999.)[0]
+
+                            if len(foo) > 0:
+                                available[k] = 1
+                            else:
+                                print('No valid windsonde data found')
+
+                        foo = np.where((retz < vip['insitu_minalt'][k]) |
+                                   (retz > vip['insitu_maxalt'][k]))
+
+                        u_interp[foo] = -999.
+                        v_interp[foo] = -999.
+                        uerr_interp[foo] = -999.
+                        verr_interp[foo] = -999.
+                else:
+                    print('No windsonde data for retrieval at this time')
+                    u_interp = None
+                    v_interp = None
+                    uerr_interp = None
+                    verr_interp = None
+                    z_interp = None
                     
         u.append(u_interp)
         v.append(v_interp)
@@ -2442,7 +2629,6 @@ def read_model(date, retz, rtime, vip, verbose):
 
                     foo = np.where(u_interp != -999.)[0]
 
-                    print(u_interp.shape, uerr_interp.shape)
                     if len(foo) > 0:
                         available = 1
                     else:

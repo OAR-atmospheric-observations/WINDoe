@@ -588,7 +588,6 @@ for i in range(len(rtime)):
             azY.extend(copter['yaw'][foo].ravel())
             elY.extend(np.ones(len(copter['roll'][foo])).ravel()*-999)
         
-        
     Y = np.array(Y)
     sigY = np.array(sigY)
     flagY = np.array(flagY)
@@ -1071,7 +1070,69 @@ for i in range(len(rtime)):
             if vip['run_fast'] == 1:
                 iterate_once = True
         
+        # compute an obs_hgt_max for each of the data types provided in the run 
+        dtypes = [[1], [2,3], [4,5], [6,7], [8,9], [10,11], [12], [13,14]]
         
+        # create a max hight dir to store values
+        max_hgts = {'raw_lidar': -999, 'proc_lidar': -999, 'con_prof': -999, 'insitu': -999, 'model': -999, 'windoe': -999, 'raw_prof': -999}
+        
+        # overwrite to nans for datatypes that are supposed to be used in the overall retrieval 
+        if vip['raw_lidar_number'] != 0:
+            max_hgts['raw_lidar'] = np.nan
+        if vip['proc_lidar_number'] != 0:
+            max_hgts['proc_lidar'] = np.nan
+        if vip['cons_profiler_type'] != 0:
+            max_hgts['con_prof'] = np.nan
+        if vip['insitu_number'] != 0:
+            max_hgts['insitu'] = np.nan
+        if vip['use_model'] != 0:
+            max_hgts['model'] == np.nan
+        if vip['use_windoe'] != 0:
+            max_hgts['windoe'] = np.nan
+        if vip['raw_profiler_number'] != 0:
+            max_hgts['raw_prof'] = np.nan
+            
+        # loop through the different obs types
+        for t in range(len(dtypes)):
+            # find where the data of this type exists
+            foo = np.where(np.in1d(flagY, dtypes[t]))[0]
+
+            # if there is no data, move forward
+            if len(foo) == 0:
+                continue
+            
+            # subselect our uncertainties and heights
+            sigy_foo = sigY[foo]
+            dimY_foo = dimY[foo]
+            
+            # determine if we are using insitu obs
+            if dtypes[t][0] == 6:
+                # whatever the highest height is containing insitu obs is our max height
+                max_hgts['insitu'] = np.nanmax(dimY_foo)
+            
+            if dtypes[t][0] == 1:
+                max_hgts['raw_lidar'] = np.nanmax(dimY_foo)
+                
+            # if we are not working with raw lidar or isitu obs
+            else:
+                # loop through each height we have data for 
+                for zz in np.unique(dimY_foo):
+                    # find where we have data at that height where the uncertainty is within our bounds 
+                    fah = np.where((dimY_foo == zz) & (sigy_foo < 9))[0]
+                    
+                    # if we have at least one good data point, this is our max height 
+                    if len(fah) > 0:
+                        if dtypes[t][0] == 2:
+                            max_hgts['proc_lidar'] = zz
+                        if dtypes[t][0] == 4:
+                            max_hgts['con_prof'] = zz
+                        if dtypes[t][0] == 8:
+                            max_hgts['model'] = zz
+                        if dtypes[t][0] == 10:
+                            max_hgts['windoe'] = zz
+                        if dtypes[t][0] == 12:
+                            max_hgts['con_prof'] = zz           
+                 
         # Set an error floor of 1 for all observations except Copter data to 
         # prevent overfitting
         # TODO: Make noise floor part of namelist
@@ -1200,7 +1261,7 @@ for i in range(len(rtime)):
                 'niter':itern, 'z':np.copy(z), 'X0':np.copy(X0), 'Xn':np.copy(Xn), 'FXn':np.copy(FXn),
                 'Sop':np.copy(Sop), 'Gain':np.copy(Gain), 'Akern':np.copy(Akern), 'vres':np.copy(vres),
                 'gamma':gfac, 'qcflag':0, 'sic':sic, 'dfs':np.copy(dfs), 'cdfs':np.copy(cdfs), 'di2n':di2n,
-                'rmsa':rmsa, 'rmsp':rmsp, 'chi2':chi2, 'converged':converged}
+                'rmsa':rmsa, 'rmsp':rmsp, 'chi2':chi2, 'converged':converged, 'max_heights': max_hgts}
         
         if converged == 0:
             Xn = np.copy(Xnp1[:,0])
@@ -1267,7 +1328,7 @@ for i in range(len(rtime)):
                 'niter':itern, 'z':np.copy(z), 'X0':np.copy(X0), 'Xn':np.copy(Xn), 'FXn':np.copy(FXn),
                 'Sop':np.copy(Sop), 'Gain':np.copy(Gain), 'Akern':np.copy(Akern), 'vres':np.copy(vres),
                 'gamma':gfac, 'qcflag':0, 'sic':sic, 'dfs':np.copy(dfs), 'cdfs':np.copy(cdfs), 'di2n':di2n,
-                'rmsa':rmsa, 'rmsp':rmsp, 'chi2':chi2, 'converged':converged}
+                'rmsa':rmsa, 'rmsp':rmsp, 'chi2':chi2, 'converged':converged, 'max_heights': max_hgts}
         
         xsamp.append(xtmp)
         print('Converged! (best RMS after max_iter)')
@@ -1297,7 +1358,7 @@ for i in range(len(rtime)):
         xsamp[-1]['qcflag'] = 0
     
     dindices = Other_functions.compute_dindices(xsamp[-1],vip)
-    
+
     # Write the data into the netCDF file
     success, noutfilename = Output_Functions.write_output(vip, globatt, xsamp[-1], dindices, prior, fsample, (endtime-starttime).total_seconds(),
                                                           noutfilename, shour, verbose)
@@ -1309,11 +1370,10 @@ for i in range(len(rtime)):
         
     fsample += 1
     
-  
     
 totaltime = (endtime - starttime).total_seconds()
 
-print('Processing took ' + str(totaltime) + ' seconds')
+('Processing took ' + str(totaltime) + ' seconds')
 
 # Successful exit
 print(('>>> WINDoe retrieval on ' + str(date) + ' ended properly <<<'))

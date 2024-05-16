@@ -181,6 +181,12 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
         obs_min = fid.createVariable('obs_hgt_min', 'f4', ('time',))
         obs_min.long_name = 'Height of lowest observation'
         obs_min.units = 'km'
+
+        for i in xret['max_heights']:
+            if xret['max_heights'][i] != -999:
+                max_height = fid.createVariable(f'{i}_hgt_max', 'f4', ('time',))
+                max_height.long_name = f'Maximum height of {i} data'
+                max_height.units = 'km'
         
         if vip['raw_lidar_number'] > 0:
             rdim = fid.createDimension('raw_dim', vip['raw_lidar_number'])
@@ -357,6 +363,11 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
     foo = np.where((((xret['flagY'] < 8) | (xret['flagY'] > 11)) & (xret['sigY'] < 50)))[0]
     obs_max[fsample] = np.nanmax(xret['dimY'][foo])
     obs_min[fsample] = np.nanmin(xret['dimY'][foo])
+    
+    for i in xret['max_heights']:
+        if xret['max_heights'][i] != -999:
+            max_hgt = fid.variables[f'{i}_hgt_max']
+            max_hgt[fsample] = xret['max_heights'][i]
     
     # only add the covariance matrix if specified
     if vip['keep_file_small'] == 0:

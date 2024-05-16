@@ -88,10 +88,11 @@ def compute_vres_from_akern(akern,z,do_cdfs = False, do_area = False):
 # This is the ARM VAD function that is used to get error estimates for the radial
 # velocity values
     
-def wind_estimate(vr,el,az,ranges,eff_N,default_sigma=100000,missing=-999):
+def wind_estimate(vr,el,az,ranges,eff_N,sig_thresh = 9,default_sigma=100000,missing=-999):
     
     # Initialize the arrays
     sigma = np.ones(len(ranges))*np.nan
+    thresh_sigma = np.ones(len(ranges))*np.nan
     
     coords = az + 1j*el
     # Loop over all the ranges
@@ -124,18 +125,23 @@ def wind_estimate(vr,el,az,ranges,eff_N,default_sigma=100000,missing=-999):
         #sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/(len(foo)-3))
         
         sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/N)
+        thresh_sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/(len(foo) - 3))
         # We are going to try this QC. If there is a significant w component
         # determine the uncertainty with no w component
         
         if np.abs(v0[2]) >= 3:
             vh_0 = (np.linalg.pinv(A[:,:-1].T.dot(A[:,:-1]))).dot(A[:,:-1].T).dot(vr[foo,i])
             
-            temp_sigma = np.sqrt(np.nansum((vr[foo,i] - A[:,:-1].dot(vh_0))**2)/(N+1))
+            temp_sigma = np.sqrt(np.nansum((vr[foo,i] - A[:,:-1].dot(vh_0))**2))/(N+1)
+            temp_thresh_sigma = np.sqrt(np.nansum((vr[foo,i] - A[:,:-1].dot(vh_0))**2))/((len(foo) - 3) + 1)
             
             if temp_sigma > sigma[i]:
                 sigma[i] = np.copy(temp_sigma)
-                
-    return sigma
+                thresh_sigma[i] = np.copy(temp_thresh_sigma)
+    
+    sigma[thresh_sigma > sig_thresh] = default_sigma
+    
+    return sigma, thresh_sigma
 
 def consensus_average(x, width, cutoff, min_percentage,missing=-999.):
     

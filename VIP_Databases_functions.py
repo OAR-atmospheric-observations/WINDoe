@@ -66,6 +66,7 @@ def read_vip_file(filename,globatt,verbose):
             'raw_lidar_fix_csm_azimuths':[0],          # Fix the azimuths of the lidar scans
             'raw_lidar_fix_heading':[0],     # Use the heading in the lidar file to add to the azimuths
             'raw_lidar_eff_N':-1,            # The effective number samples to use when calculating the lidar error. -1 means use actual N
+            'raw_lidar_sig_thresh': 10,       # sigma value to filter noise from windoe estimate
             
             'proc_lidar_number':0,           # Number of lidar data sources used in the retrieval
             'proc_lidar_type':[0],           # List of lidar types. 0-None, 1-CLAMPS VAD, 2-ARM/NCAR VAD
@@ -124,6 +125,7 @@ def read_vip_file(filename,globatt,verbose):
             'output_path':'None',         # Path where the output file will be placed
             'output_clobber':0,           # 0 - do not clobber preexisting output files, 1 - clobber them, 2 - append to the last file of this day
             'qc_rms_value':3,             # Maximum RMS for retrieval to be good
+            'keep_file_small':1,          # 0 - return the covariance matrix, 1 - do not return the covariance matrix
             'vip_filename':'None'}        # Just for tracability
            )
     
@@ -175,6 +177,7 @@ def read_vip_file(filename,globatt,verbose):
                         (key == 'raw_lidar_timedelta') or
                         (key == 'raw_lidar_fix_csm_azimuths') or
                         (key == 'raw_lidar_fix_heading') or
+                        (key == 'raw_lidar_sig_thresh') or
                         (key == 'proc_lidar_type') or
                         (key == 'proc_lidar_paths') or
                         (key == 'proc_lidar_minalt') or
@@ -288,6 +291,10 @@ def check_vip(vip):
     
     if ((vip['output_clobber'] < 0) or (vip['output_clobber'] > 2)):
         print('Error: The output_clobber flag can only be set to 0, 1, or 2')
+        flag = 1
+        
+    if ((vip['keep_file_small'] < 0) or (vip['keep_file_small'] > 1)):
+        print('Error: The keep_file_small flag can only be set to 0 or 1')
         flag = 1
     
     foo = np.where((np.array(vip['raw_lidar_type']) < 0) | (np.array(vip['raw_lidar_type']) > 5))[0]
