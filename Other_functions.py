@@ -126,6 +126,7 @@ def wind_estimate(vr,el,az,ranges,eff_N,sig_thresh = 9,default_sigma=100000,miss
         
         sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/N)
         thresh_sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/(len(foo) - 3))
+
         # We are going to try this QC. If there is a significant w component
         # determine the uncertainty with no w component
         
