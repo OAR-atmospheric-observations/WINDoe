@@ -125,7 +125,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                             el_scan.append(elx[foo])
                             vr_scan.append(vrx[foo, :])
                             snr_scan.append(snrx[foo, :])
-
+                    
                     to_scan = np.array(to_scan)
                     az_scan = np.array(az_scan)
                     el_scan = np.array(el_scan)
@@ -1852,7 +1852,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
                         vxx = np.append(vxx, vx)
 
                 if not no_data:
-                    foo = np.where(np.abs(uxx) < -100.)
+                    foo = np.where((np.abs(uxx) > 100.) | (np.abs(vxx) > 100.))
                     uxx[foo] = np.nan
                     vxx[foo] = np.nan
 
@@ -1950,7 +1950,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
                         vxx = np.append(vxx, vx)
 
                 if not no_data:
-                    foo = np.where(np.abs(uxx) < -100.)
+                    foo = np.where((np.abs(uxx) > 100.) | (np.abs(vxx) > 100.))
                     uxx[foo] = np.nan
                     vxx[foo] = np.nan
 
@@ -2197,7 +2197,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
 
                     sx = fid.variables['sfc_wspd'][foo]
                     wdx = fid.variables['sfc_wdir'][foo]
-                    qcx = fid.variables['qc4'][foo]
+                    qcx = np.zeros_like(wdx)
 
                     fid.close()
 
@@ -2216,7 +2216,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
                         qcxx = np.append(qcxx,qcx)
 
                 if not no_data:
-                    foo = np.where(np.abs(uxx) < -100.)
+                    foo = np.where((np.abs(uxx) > 100.) | (np.abs(vxx) > 100.))
                     uxx[foo] = np.nan
                     vxx[foo] = np.nan
                     
