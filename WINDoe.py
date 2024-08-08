@@ -133,6 +133,7 @@ cvgmult = 0.1            # I will leave this here for now, but later will add th
 # Read in the a priori covariance matrix of u and v for this study
 nsonde_prior = -1
 try:
+    print(('Read prior file: ' + prior_filename))
     fid = Dataset(prior_filename,'r')
 except:
     print('Error: Unable to open the XaSa file')
