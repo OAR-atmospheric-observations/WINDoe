@@ -297,9 +297,9 @@ def check_vip(vip):
         print('Error: The keep_file_small flag can only be set to 0 or 1')
         flag = 1
     
-    foo = np.where((np.array(vip['raw_lidar_type']) < 0) | (np.array(vip['raw_lidar_type']) > 5))[0]
+    foo = np.where((np.array(vip['raw_lidar_type']) < 0) | (np.array(vip['raw_lidar_type']) > 6))[0]
     if len(foo) > 0:
-        print('Error: lidar_type can only be set to 0, 1, 2, 3, or 4')
+        print('Error: lidar_type can only be set to 0, 1, 2, 3, 4, 5, or 6')
         flag = 1
     
     foo = np.where((np.array(vip['proc_lidar_type']) < 0) | (np.array(vip['proc_lidar_type']) > 3))[0]

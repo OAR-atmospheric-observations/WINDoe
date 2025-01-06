@@ -134,6 +134,9 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
 
                     # There are no times we want here so just move on
                     if len(to_scan) == 0:
+                        if verbose >= 3:
+                            print(f"No scans found in {files[i]} for this time ...")
+                        
                         fid.close()
                         continue
 
@@ -198,7 +201,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                                 retz, hgt, vrxx[ii, jj, :], left=-999, right=-999)
 
                         temp_sig, thresh_sig = Other_functions.wind_estimate(
-                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
+                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'][k])
                         vr_varzz[ii, :, :] = temp_sig[None, :]
 
                     foo = np.where(vr_varzz > 90000)
@@ -235,7 +238,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                     vr_varxx = None
 
         # Read in Windcube 200s data
-        if vip['raw_lidar_type'][k] == 2:
+        elif vip['raw_lidar_type'][k] == 2:
             if verbose >= 1:
                 print('Reading in unprocessed Windcube 200s lidar files')
 
@@ -356,7 +359,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                                 retz, hgt, vrxx[ii, jj, :], left=-999, right=-999)
 
                         temp_sig, thresh_sig = Other_functions.wind_estimate(
-                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
+                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'][k])
                         vr_varzz[ii, :, :] = temp_sig[None, :]
 
                     foo = np.where(vr_varzz > 90000)
@@ -393,7 +396,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                     vrxx = None
                     vr_varxx = None
 
-        if vip['raw_lidar_type'][k] == 3:
+        elif vip['raw_lidar_type'][k] == 3:
             if verbose >= 1:
                 print('Reading in unprocessed CLAMPS CSM Halo lidar file')
 
@@ -525,7 +528,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                             retz, hgt, vrxx[ii, :], left=-999, right=-999)
 
                     temp_sig, thresh_sig = Other_functions.wind_estimate(
-                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
+                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'][k])
                     
                     vr_varzz[:, :] = temp_sig[None, :]
 
@@ -556,7 +559,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                     vrxx = None
                     vr_varxx = None
 
-        if vip['raw_lidar_type'][k] == 4:
+        elif vip['raw_lidar_type'][k] == 4:
             if verbose >= 1:
                 print('Reading in unprocessed ARM Halo lidar files')
 
@@ -590,8 +593,10 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
 
                     if ((bt+np.nanmean(to) < rtime-((vip['raw_lidar_timedelta'][k]/2.)*60)) |
                             (bt+np.nanmean(to) >= rtime+((vip['raw_lidar_timedelta'][k]/2.)*60))):
-
                         # There are no times we want here so just move on
+                        if verbose >= 3:
+                            print(f"No scans found in {files[i]} for this time ...")
+                        
                         fid.close()
                         continue
 
@@ -601,7 +606,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                     vrx = fid.variables['radial_velocity'][:, :].data
                     snrx = 10 * \
                         np.log10(fid.variables['intensity'][:, :].data - 1)
-
+                    
                     fid.close()
 
                     if no_data:
@@ -672,7 +677,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                                 retz, hgt, vrxx[ii, jj, :], left=-999, right=-999)
 
                         temp_sig, thresh_sig = Other_functions.wind_estimate(
-                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
+                            vrzz[ii], elxx[ii], azxx[ii], retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'][k])
                         vr_varzz[ii, :, :] = temp_sig[None, :]
 
                     foo = np.where(vr_varzz > 90000)
@@ -708,7 +713,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                     vrxx = None
                     vr_varxx = None
     
-        if vip['raw_lidar_type'][k] == 5:
+        elif vip['raw_lidar_type'][k] == 5:
             if verbose >= 1:
                 print('Reading in unprocessed ARM CSM Halo lidar file')
 
@@ -840,7 +845,7 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                             retz, hgt, vrxx[ii, :], left=-999, right=-999)
 
                     temp_sig, thresh_sig = Other_functions.wind_estimate(
-                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
+                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'][k])
                     vr_varzz[:, :] = temp_sig[None, :]
 
                     foo = np.where(vr_varzz > 90000)
@@ -869,6 +874,154 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                     elxx = None
                     vrxx = None
                     vr_varxx = None
+
+        elif vip['raw_lidar_type'][k] == 6:
+            if verbose >= 1:
+                print('Reading in unprocessed MoDLS lidar file')
+
+            dates = [(datetime.strptime(str(date), '%Y%m%d') - timedelta(days=1)).strftime('%Y%m%d'),
+                     str(date),  (datetime.strptime(str(date), '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')]
+
+            files = []
+            for i in range(len(dates)):
+                for j in range(len(cdf)):
+                    files = files + \
+                        sorted(
+                            glob.glob(vip['raw_lidar_paths'][k] + '/' + '*' + dates[i] + '*.' + cdf[j]))
+
+            if len(files) == 0:
+                if verbose >= 1:
+                    print(
+                        'No MoDLS lidar files found in this directory for this date')
+                lsecsx = None
+                rngxx = None
+                azxx = None
+                elxx = None
+                vrxx = None
+                vr_varxx = None
+            else:
+                for i in range(len(files)):
+                    fid = Dataset(files[i], 'r')
+                    bt = fid.variables['epochTime'][0]
+                    to = fid.variables['epochTime'][:] - bt
+
+                    foo = np.where((bt+to >= rtime-((vip['raw_lidar_timedelta'][k]/2.)*60)) &
+                                   (bt+to < rtime+((vip['raw_lidar_timedelta'][k]/2.)*60)))[0]
+
+                    # There are no times we want here so just move on
+                    if len(foo) == 0:
+                        fid.close()
+                        continue
+
+                    rngx = fid.variables['height'][:] / 1000
+                    elx = fid.variables['elevation'][:]
+                    vrx = fid.variables['velocity'][:, :]
+                    snrx = 10*np.log10(fid.variables['intensity'][:, :] - 1)
+                    azx = fid.variables['azimuth'][:]
+
+                    fid.close()
+                
+
+
+                    if no_data:
+                        lsecsx = bt+to[foo]
+                        rngxx = np.array([rngx]*len(to[foo]))
+                        azxx = np.copy(azx[foo])
+                        elxx = elx[foo]
+                        vrxx = vrx[foo, :]
+                        snrxx = snrx[foo, :]
+                        no_data = False
+
+                    else:
+
+                        # Check to make sure the range array is the same length
+                        # and azimuth and elevation are the same. If not
+                        # abort and tell user
+
+                        if (len(rngx) != len(rngxx[0])):
+                            print('Error: Raw lidar data source ' + str(k+1) +
+                                  ' changed during period retrieval period')
+                            continue
+                        
+                        lsecsx = np.append(lsecsx, bt+to[foo])
+                        rngxx = np.append(rngxx, np.array(
+                            [rngx]*len(to[foo])), axis=0)
+                        azxx = np.append(azxx, azx[foo])
+                        elxx = np.append(elxx, elx[foo])
+                        vrxx = np.append(vrxx, vrx[foo], axis=0)
+                        snrxx = np.append(snrxx, snrx[foo], axis=0)
+
+                if not no_data:
+
+                    # Set the vr variance to a constant value
+
+                    rngxx = rngxx[0]
+
+                    # We only want to use data that falls in our snr bounds
+
+                    foo = np.where((snrxx < vip['raw_lidar_minsnr'][k]) |
+                                   (snrxx > vip['raw_lidar_maxsnr'][k]))
+
+                    vrxx[foo] = np.nan
+                    snrxx[foo] = np.nan
+
+                    # We only want to use data between min range and max range so set
+                    # everything else to missing
+
+                    foo = np.where((rngxx < vip['raw_lidar_minrng'][k]) |
+                                   (rngxx > vip['raw_lidar_maxrng'][k]))[0]
+
+                    vrxx[:, foo] = np.nan
+
+                    # Now interpolate to the heights of the retrieval
+                    vrzz = np.ones((len(elxx), len(retz)))*-999
+                    vr_varzz = np.ones((len(elxx), len(retz)))*-999
+
+                    for ii in range(len(elxx)):
+                        hgt = rngxx*np.sin(np.deg2rad(elxx[ii]))
+                        vrzz[ii, :] = np.interp(
+                            retz, hgt, vrxx[ii, :], left=-999, right=-999)
+
+                    temp_sig, thresh_sig = Other_functions.wind_estimate(
+                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'][k])
+                    
+                    vr_varzz[:, :] = temp_sig[None, :]
+
+                    foo = np.where(vr_varzz > 90000)
+                    vrzz[foo] = -999
+                    
+                    vrxx = np.copy(vrzz)
+                    vr_varxx = np.copy(vr_varzz)
+
+                    vrxx[np.isnan(vrxx)] = -999
+                    vr_varxx[np.isnan(vr_varxx)] = -999
+
+                    vrxx = vrxx.T
+                    vr_varxx = vr_varxx.T
+
+                    foo = np.where((vrxx != -999) & (vr_varxx < 3000))[0]
+                    if len(foo) > 0:
+                        available[k] = 1
+                    else:
+                        print('No valid MoDLS lidar data found')
+
+                else:
+                    print('No raw MoDLS data for retrieval at this time')
+                    lsecsx = None
+                    rngxx = None
+                    azxx = None
+                    elxx = None
+                    vrxx = None
+                    vr_varxx = None
+
+        else:
+            lsecsx = None
+            rngxx = None
+            azxx = None
+            elxx = None
+            vrxx = None
+            vr_varxx = None
+
 
         if lsecsx is None:
             lsecs.append(np.copy(lsecsx))
