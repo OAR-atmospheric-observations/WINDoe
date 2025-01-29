@@ -1877,7 +1877,9 @@ def read_insitu(date, retz, rtime, vip, verbose):
                         verr_interp = 1.0
 
                     # This is all 10-m data
-                    z_interp = np.array([retz[0]])
+                    #z_interp = np.array([retz[0]])
+                    #lowest retz is usually 0 m, set manually to 10 m
+                    z_interp = np.array([0.010])
 
                     u_interp = np.array([u_interp])
                     v_interp = np.array([v_interp])

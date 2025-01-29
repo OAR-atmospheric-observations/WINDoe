@@ -144,6 +144,32 @@ z = fid.variables['height'][:]
 Xa = np.array(fid.variables['mean_prior'][:])
 Sa = np.array(fid.variables['covariance_prior'][:])
 
+
+# Interpolate the input prior to the new specified height grid
+zz = vip['zgrid']
+#zz = vip['zgrid'].split(',')
+zz = np.array(zz).astype(float)
+if Other_functions.test_monotonic(zz) == False:
+    print('Error: The input vip.zgrid is not strictly monotonically ascending -- aborting')
+    VIP_Databases_functions.abort(date)
+    sys.exit()
+if zz[0] != 0:
+    print('Error: The first level of the input vip.zgrid is not zero (a requirement) -- aborting')
+    VIP_Databases_functions.abort(date)
+    sys.exit()
+if np.max(zz) >= np.max(z):
+    print(f'Error: The maximum height in the input vip.grid must be less than {np.max(z):.3f} km')
+    VIP_Databases_functions.abort(date)
+    sys.exit()
+if(verbose >= 2):
+    print('  Adjusting prior to the defined vertical grid')
+newXa,newSa,_ = Other_functions.interpolate_prior_covariance(z,Xa,Sa,np.full(z.shape,np.nan),zz,verbose=verbose)
+        # Replace the prior values from the input file with the values on the input zgrid
+z  = zz
+Xa = newXa
+Sa = newSa
+
+
 # Add in the prior information for w
 Xa = np.append(Xa,np.zeros(len(z)))
 temp_zeros = np.zeros((len(z)*2,len(z)))
@@ -152,7 +178,6 @@ temp_Sa = np.append(Sa,temp_zeros.T,axis = 0)
 Sa = np.append(temp_Sa,np.append(temp_zeros,temp_wcov,axis = 0),axis=1)
 
 sig_Xa = np.sqrt(np.diag(Sa))
-
 
 z2 = np.append(z,z)
 
@@ -174,11 +199,11 @@ if verbose == 3:
 fid.close()
 
 
+
 if verbose >= 1:
     print('Retrived profiles will have ' + str(len(z)) + ' levels (from prior)')
 if verbose >= 2:
     print('There were ' + str(nsonde_prior) + ' radiosondes used in the calculation of the prior')
-
 # TODO -- Add inflate prior covariance function here
 
 if ehour < 0:
@@ -453,7 +478,7 @@ for i in range(len(rtime)):
                                (insitu['v'][j] >= -500) & (insitu['v_error'][j] >= -500))
             
                 if len(foo[0]) == 0:
-                    print('Major error when adding proc_lidar data to observation vector. This should not happen!')
+                    print('Major error when adding insitu data to observation vector. This should not happen!')
                     VIP_Databases_functions.abort(date)
                     sys.exit()
                     
@@ -1169,7 +1194,6 @@ for i in range(len(rtime)):
             Sop = Binv.dot(gfac*gfac*SaInv + Kij.T.dot(SmInv).dot(Kij)).dot(Binv)
             SopInv = scipy.linalg.inv(Sop)
             Akern = Binv.dot(Kij.T).dot(SmInv).dot(Kij)
-        
         # Look for NaN values in the updated state vector. They should not exist,
         # but if they do, then let's stop the code
         foo = np.where(np.isnan(Xnp1))[0]

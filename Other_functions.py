@@ -342,4 +342,88 @@ def get_w_covariance(z,mean,lengthscale):
     
     
     
-    
+###############################################################################
+# This routine tests whether an array is monotonic (returns TRUE) or not (FALSE)
+###############################################################################
+def test_monotonic(x,strict=True):
+    dx = np.diff(x)
+    if strict == True:
+        return np.all(dx <  0) or np.all(dx >  0)
+    else:
+        return np.all(dx <= 0) or np.all(dx >= 0)    
+
+################################################################################
+# This function interpolates the prior covariance to a different height grid.
+# It first converts the covariance to correlation, and interpolates the correlation
+# matrix to the new height grid.  The variance is interpolated the new height
+# grid.  And then the new covariance matrix is computed.  This routine also
+# linearly interpolates the mean prior and pressure profile to the new vertical grid
+################################################################################
+def interpolate_prior_covariance(z,Xa,Sa,Pa,zz,verbose=3,debug=False):
+    k  = len(z)
+    kk = len(zz)
+    kidx  = np.arange(k)
+    kkidx = np.arange(kk)
+        # Pull out the mean T and Q profiles from Xa
+    meanT = Xa[kidx]
+    meanQ = Xa[k+kidx]
+        # Compute the correlation matrix
+    Ca = np.zeros_like(Sa)
+    for i in range(2*k):
+        for j in range(2*k):
+            Ca[i,j] = Sa[i,j]/(np.sqrt(Sa[i,i])*np.sqrt(Sa[j,j]))
+        # Interpolate this correlation matrix to the new height grid
+    if(verbose >= 2):
+        print('    Computing prior correlation matrix to the new grid')
+    newCa = np.zeros((2*kk,2*kk))
+    for i in range(kk):
+        j = np.where(z >= zz[i])[0]
+        if j[0] == 0:
+            j = 1
+        else:
+            j = j[0]
+        wgt = (zz[i]-z[j-1])/(z[j]-z[j-1])
+        newCa[i,kkidx]       = np.interp(zz,z,Ca[j-1,kidx]*(1-wgt)     + wgt*Ca[j,kidx])
+        newCa[kk+i,kk+kkidx] = np.interp(zz,z,Ca[k+j-1,k+kidx]*(1-wgt) + wgt*Ca[k+j,k+kidx])
+        newCa[i,kk+kkidx]    = np.interp(zz,z,Ca[j-1,k+kidx]*(1-wgt)   + wgt*Ca[j,k+kidx])
+        newCa[kk+i,kkidx]    = np.interp(zz,z,Ca[k+j-1,kidx]*(1-wgt)  + wgt*Ca[k+j,kidx])
+            # Ensure that the diagonal of the new correlation matrix is unity
+    for i in range(2*kk):
+        newCa[i,i] = 1
+            # compute the variance vector on the new height grid
+            # and use the same logic to get the new mean vector on this grid
+    varSaT    = np.zeros(len(z))
+    for i in range(k):
+        varSaT[i] = Sa[i,i]
+    newvarSaT = np.interp(zz, z, varSaT)
+    newmeanT  = np.interp(zz, z, meanT)
+    varSaQ    = np.zeros(len(z))
+    for i in range(k):
+        varSaQ[i] = Sa[k+i,k+i]
+    newvarSaQ = np.interp(zz, z, varSaQ)
+    newmeanQ  = np.interp(zz, z, meanQ)
+    newvarSa  = np.append(newvarSaT,newvarSaQ)
+    newXa     = np.append(newmeanT,newmeanQ)
+    newPa     = np.interp(zz, z, Pa)
+
+            # Now rebuild the new covariance matrix
+    if(verbose >= 2):
+        print('    Rebuilding prior covariance matrix on the new grid')
+    newSa = np.zeros_like(newCa)
+    for i in range(2*kk):
+        for j in range(2*kk):
+            newSa[i,j] = newCa[i,j] * np.sqrt(newvarSa[i])*np.sqrt(newvarSa[j])
+
+            # If the debug option is set, then write out the interpolated prior output
+    if debug == True:
+        print('    Writing the parts generated from interpolate_prior_covariance()')
+        Output_Functions.write_variable(Sa,'/data/origSa.cdf')
+        Output_Functions.write_variable(Ca,'/data/origCa.cdf')
+        Output_Functions.write_variable(newCa,'/data/newCa.cdf')
+        Output_Functions.write_variable(newSa,'/data/newSa.cdf')
+        Output_Functions.write_variable(z,'/data/z.cdf')
+        Output_Functions.write_variable(zz,'/data/newz.cdf')
+        Output_Functions.write_variable(Xa,'/data/oXa.cdf')
+        Output_Functions.write_variable(newXa,'/data/nXa.cdf')
+
+    return newXa, newSa, newPa
