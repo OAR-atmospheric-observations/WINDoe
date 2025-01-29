@@ -1980,7 +1980,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
                         available[k] = 1
 
                 else:
-                    print('No ARM met station data for retrieval at this time')
+                    print('No CLAMPS met station data for retrieval at this time')
                     u_interp = None
                     v_interp = None
                     uerr_interp = None
