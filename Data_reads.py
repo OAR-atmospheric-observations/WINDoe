@@ -82,13 +82,23 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
             else:
                 first_scan = True
                 for i in range(len(files)):
+                    if verbose >= 3:
+                        print(f"    Reading in dl file {files[i]}")
+
                     fid = Dataset(files[i], 'r')
                     bt = fid.variables['base_time'][0]
                     to = fid.variables['time_offset'][:]
                     rngx = fid.variables['range'][:]
                     #azx =(fid.variables['azimuth'][:] +
                     #       fid.variables['heading'][:]) % 360
-                    azx =fid.variables['azimuth'][:]
+
+                    if vip['raw_lidar_fix_heading'][k] == 1:
+                        azx = (fid.variables['azimuth'][:] +
+                               fid.variables['heading'][:]) % 360
+                        hd = fid.variables['heading'][:]
+                    else:
+                        azx = fid.variables['azimuth'][:]
+
                     elx = fid.variables['elevation'][:]
                     vrx = fid.variables['velocity'][:, :]
                     snrx = 10*np.log10(fid.variables['intensity'][:, :] - 1)
@@ -1173,8 +1183,8 @@ def read_proc_lidar(date, retz, rtime, vip, verbose):
                     # We only want to use data between min range and max range so set
                     # everything else to missing
 
-                    foo = np.where((retz < vip['proc_lidar_minrng'][k]) |
-                                   (retz > vip['proc_lidar_maxrng'][k]))
+                    foo = np.where((retz < vip['proc_lidar_minalt'][k]) |
+                                   (retz > vip['proc_lidar_maxalt'][k]))
 
                     u_interp[foo] = -999.
                     v_interp[foo] = -999.
@@ -1632,6 +1642,128 @@ def read_prof_cons(date, retz, rtime, vip, verbose):
                     available = 1
                 else:
                     print('No valid consensus wind profiler data found')
+            
+    elif vip['cons_profiler_type'] == 2:
+        if verbose >= 1:
+            print('Reading in UAH 915MHz consensus winds file')
+
+        dates = [(datetime.strptime(str(date), '%Y%m%d') - timedelta(days=1)).strftime('%Y%m%d'),
+                 str(date),  (datetime.strptime(str(date), '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')]
+
+        files = []
+        for i in range(len(dates)):
+            for j in range(len(cdf)):
+                files = files + \
+                    sorted(glob.glob(vip['cons_profiler_path'] +
+                           '/' + '*915*' + dates[i] + '*.' + cdf[j]))
+
+        if len(files) == 0:
+            if verbose >= 1:
+                print(
+                    'No UAH 915MHz consensus wind files found in this directory for this date')
+            lsecsx = None
+            u_interp = None
+            v_interp = None
+            uerr_interp = None
+            verr_interp = None
+        else:
+            for i in range(len(files)):
+                if verbose >= 3:
+                    print(f"   Reading RWP file {files[i]}")
+
+                fid = Dataset(files[i], 'r')
+                bt = fid.variables['epochTime'][0]
+                to = fid.variables['epochTime'][:] - bt
+
+                foo = np.where((bt+to >= rtime-((vip['cons_profiler_timedelta']/2.)*60)) &
+                               (bt+to < rtime+((vip['cons_profiler_timedelta']/2.)*60)))[0]
+
+                # There are no times we want here so just move on
+                if len(foo) == 0:
+                    fid.close()
+                    continue
+
+                zx = fid.variables['height'][:]/1000.
+                ux = fid.variables['u'][foo, :]
+                vx = fid.variables['v'][foo, :]
+
+                # Replace UAH missing value with WINDoe missing value
+                # ux = np.where(ux == 999.9, -999, ux)
+                # vx = np.where(vx == 999.9, -999, vx)
+
+                fid.close()
+
+                if no_data:
+                    lsecsx = bt+to[foo]
+                    zxx = np.copy(zx)
+                    uxx = np.copy(ux)
+                    vxx = np.copy(vx)
+                    u_errx = np.ones(uxx.shape)*2
+                    v_errx = np.ones(vxx.shape)*2
+
+                    no_data = False
+                else:
+                    lsecsx = np.append(lsecsx, bt+to[foo])
+                    zxx = np.vstack((zxx, zx))
+                    uxx = np.vstack((uxx, ux))
+                    vxx = np.vstack((vxx, vx))
+                    u_errx = np.ones(uxx.shape)*2
+                    v_errx = np.ones(vxx.shape)*2
+
+            if not no_data:
+                zxx = zxx.T
+                uxx = uxx.T
+                vxx = vxx.T
+                u_errx = u_errx.T
+                v_errx = v_errx.T
+
+                foo = np.where(np.abs(uxx) >= 999.)
+                uxx[foo] = np.nan
+                vxx[foo] = np.nan
+                u_errx[foo] = np.nan
+                v_errx[foo] = np.nan
+
+                # Interpolate the data to the retrieval vertical grid
+                f = interpolate.interp1d(
+                    zxx, uxx, axis=0, bounds_error=False, fill_value=-999)
+                u_interp = f(np.copy(retz))
+
+                f = interpolate.interp1d(
+                    zxx, vxx, axis=0, bounds_error=False, fill_value=-999)
+                v_interp = f(np.copy(retz))
+
+                f = interpolate.interp1d(
+                    zxx, u_errx, axis=0, bounds_error=False, fill_value=-999)
+                uerr_interp = f(np.copy(retz))
+
+                f = interpolate.interp1d(
+                    zxx, v_errx, axis=0, bounds_error=False, fill_value=-999)
+                verr_interp = f(np.copy(retz))
+
+                # Get rid of NaN values
+                foo = np.where(np.isnan(u_interp))
+
+                u_interp[foo] = -999.
+                v_interp[foo] = -999.
+                uerr_interp[foo] = -999.
+                verr_interp[foo] = -999.
+
+                # We only want to use data between min range and max range so set
+                # everything else to missing
+
+                foo = np.where((retz < vip['cons_profiler_minalt']) |
+                               (retz > vip['cons_profiler_maxalt']))
+
+                u_interp[foo] = -999.
+                v_interp[foo] = -999.
+                uerr_interp[foo] = -999.
+                verr_interp[foo] = -999.
+
+                foo = np.where(u_interp != -999.)[0]
+                if len(foo) > 0:
+                    available = 1
+                else:
+                    print('No valid consensus wind profiler data found')
 
             else:
                 print('No consensus wind profiler data for retrieval at this time')
@@ -1675,7 +1807,7 @@ def read_raw_prof(date, retz, rtime, vip, verbose):
             for i in range(len(dates)):
                 files = files + \
                     sorted(glob.glob(vip['raw_profiler_paths'][k] +
-                                     '/' + 'sgp915*.' + dates[i] + '*.nc'))
+                                     '/' + 'sgp915*' + dates[i] + '*.nc'))
             
             if len(files) == 0:
                 if verbose >= 1:
@@ -2163,6 +2295,9 @@ def read_insitu(date, retz, rtime, vip, verbose):
                 verr_interp = None
             else:
                 for i in range(len(files)):
+                    if verbose >= 3:
+                        print(f"    Reading file {files[i]}")
+
                     fid = Dataset(files[i], 'r')
                     bt = fid.variables['base_time'][0]
                     to = fid.variables['time_offset'][0]

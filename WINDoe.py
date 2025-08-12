@@ -432,7 +432,7 @@ for i in range(len(rtime)):
                 
                 foo = np.where((insitu['u'][j] >= -500) & (insitu['u_error'][j] >= -500) &
                                (insitu['v'][j] >= -500) & (insitu['v_error'][j] >= -500))
-            
+
                 if len(foo[0]) == 0:
                     print('Major error when adding insitu data to observation vector. This should not happen!')
                     VIP_Databases_functions.abort(date)
