@@ -4,6 +4,7 @@ import scipy.io
 import scipy.interpolate
 from datetime import datetime
 from netCDF4 import Dataset
+import matplotlib.pyplot as plt
 
 ###############################################################################
 # This file contains the following functions:
@@ -112,7 +113,7 @@ def wind_estimate(vr,el,az,ranges,eff_N,sig_thresh = 9,default_sigma=100000,miss
             N = np.copy(eff_N)
         else:
             N = len(foo)-3
-            
+
         A = np.ones((len(foo),3))
         A[:,0] = np.sin(np.deg2rad(az[foo]))*np.cos(np.deg2rad(el[foo]))
         A[:,1] = np.cos(np.deg2rad(az[foo]))*np.cos(np.deg2rad(el[foo]))
@@ -139,10 +140,135 @@ def wind_estimate(vr,el,az,ranges,eff_N,sig_thresh = 9,default_sigma=100000,miss
             if temp_sigma > sigma[i]:
                 sigma[i] = np.copy(temp_sigma)
                 thresh_sigma[i] = np.copy(temp_thresh_sigma)
-    
+  
     sigma[thresh_sigma > sig_thresh] = default_sigma
     
     return sigma, thresh_sigma
+
+# B. Adler: added option in the vipfile to average wind samples
+# This is the ARM VAD function that is used to get error estimates for the radial
+# velocity values
+# radial velocities values are averaged for common full  azimuth to reduce the number of samples used in the retrieval
+    
+def wind_estimate_average(vr,el,az,ranges,eff_N,sig_thresh = 9,default_sigma=100000,missing=-999):
+    
+    # Initialize the arrays
+    sigma = np.ones(len(ranges))*np.nan
+    thresh_sigma = np.ones(len(ranges))*np.nan
+    
+    coords = az + 1j*el
+    #unique azimuth angles, this is used for averaging vr later
+    #consider bins of 1 degree
+    hist,bin_edges = np.histogram(az,np.arange(-0.5,360.5,1))
+    if len(np.where(hist==1)[0])>1:
+        print('search for unique azimuth angles within 1 deg bins')
+        idx = np.where(hist>1)
+        azu = bin_edges[idx]+0.5 #unique azimuth angles centered
+        centeredazi = 1
+    else:
+        #only works when acquisition only happens at distinct azimuth angles
+        azu = np.unique(np.round(az))
+        centeredazi = 0
+    
+    vrzz = np.ones((len(azu),len(ranges)))*np.nan
+
+    # Check if elevation angles are uniform, if not determine angle that occurs most often and use this
+    # code currently does not allow to process multiple elevation angle in one input data set
+    if len(np.unique(np.round(el))) > 1:
+        print('Elevation angles are not uniform, determine elevation angle that occurs most often and use this')
+        elu = np.unique(np.round(el))
+        felu = []
+        fel = []
+        for el_ in elu:
+            idx = np.where(np.round(el) == el_)[0]
+            felu.append(len(idx))
+            fel.append(idx)
+        idx = np.argmax(felu)
+        print('most common unique elevation angle is '+str(elu[idx]))
+        if elu[idx]<5 or elu[idx]>175:
+            print('I do not want to use an elevation angle of less than 5 or more than 175')
+            # set all vr to missing
+            vr[:,:] = -999
+            
+        elu = np.ones(len(azu))*elu[idx]
+        idx = fel[idx]
+        # only keep data at unique elevaiton angle
+        el = el[idx]
+        az = az[idx]
+        vr = vr[idx,:]
+
+    else:
+        print('elevation angle is '+str(np.unique(np.round(el))))
+        elu = np.ones(len(azu))*np.unique(np.round(el))
+        if np.unique(np.round(el))<5 or np.unique(np.round(el))>175:
+            print('I do not want to use an elevation angle of less than 5 or more than 175')
+            # set all vr to missing
+            vr[:,:] = -999
+
+    # Loop over all the ranges
+    for i in range(len(ranges)):
+
+        # Search for missing data
+        
+        foo = np.where((~np.isnan(vr[:,i])) & (vr[:,i]!=missing))[0]
+        junk, count = np.unique(coords[foo],return_counts=True)
+        
+        # Need at least 4 unique positions
+        if len(count) < 4:
+            sigma[i] = default_sigma
+            continue
+        
+        if ((eff_N > 0) & (eff_N < len(foo)-3)):
+            N = np.copy(eff_N)
+        elif eff_N == -10:
+            N = int(len(foo)/10)
+            if N < 1:
+                N = len(foo)-3
+        else:
+            N = len(foo)-3
+
+         
+
+        A = np.ones((len(foo),3))
+        A[:,0] = np.sin(np.deg2rad(az[foo]))*np.cos(np.deg2rad(el[foo]))
+        A[:,1] = np.cos(np.deg2rad(az[foo]))*np.cos(np.deg2rad(el[foo]))
+        A[:,2] = np.sin(np.deg2rad(el[foo]))
+        
+        
+        # Solve for the wind components
+        v0 = (np.linalg.pinv(A.T.dot(A))).dot(A.T).dot(vr[foo,i])
+        
+        #sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/(len(foo)-3))
+        
+        sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/N)
+        thresh_sigma[i] = np.sqrt(np.nansum((vr[foo,i] - A.dot(v0))**2)/(len(foo) - 3))
+        # We are going to try this QC. If there is a significant w component
+        # determine the uncertainty with no w component
+        
+        if np.abs(v0[2]) >= 3:
+            vh_0 = (np.linalg.pinv(A[:,:-1].T.dot(A[:,:-1]))).dot(A[:,:-1].T).dot(vr[foo,i])
+            
+            temp_sigma = np.sqrt(np.nansum((vr[foo,i] - A[:,:-1].dot(vh_0))**2)/(N+1))
+            #temp_sigma = np.sqrt(np.nansum((vr[foo,i] - A[:,:-1].dot(vh_0))**2))/(N+1)
+            temp_thresh_sigma = np.sqrt(np.nansum((vr[foo,i] - A[:,:-1].dot(vh_0))**2))/((len(foo) - 3) + 1)
+            
+            if temp_sigma > sigma[i]:
+                sigma[i] = np.copy(temp_sigma)
+                thresh_sigma[i] = np.copy(temp_thresh_sigma)
+ 
+        # Average rv for unique azimuth angles
+        # I only consider full azimuth angles
+        # do not do this when elevation angle is not unique
+        for i_az in range(len(azu)):
+            if centeredazi == 1:
+                idx = np.where(np.abs(azu[i_az]-az[foo])<=0.5)
+            else:
+                idx = np.where(np.round(az[foo]) == azu[i_az])[0]
+            vrzz[i_az,i] = np.mean(vr[foo,i][idx])
+    sigma[thresh_sigma > sig_thresh] = default_sigma
+    
+    return sigma, thresh_sigma, vrzz, elu, azu
+
 
 def consensus_average(x, width, cutoff, min_percentage,missing=-999.):
     
@@ -342,4 +468,89 @@ def get_w_covariance(z,mean,lengthscale):
     
     
     
-    
+###############################################################################
+# This routine tests whether an array is monotonic (returns TRUE) or not (FALSE)
+###############################################################################
+def test_monotonic(x,strict=True):
+    dx = np.diff(x)
+    if strict == True:
+        return np.all(dx <  0) or np.all(dx >  0)
+    else:
+        return np.all(dx <= 0) or np.all(dx >= 0)    
+
+################################################################################
+# B. Adler: added this option (logic is the same as in TROPoe)
+# This function interpolates the prior covariance to a different height grid.
+# It first converts the covariance to correlation, and interpolates the correlation
+# matrix to the new height grid.  The variance is interpolated the new height
+# grid.  And then the new covariance matrix is computed.  This routine also
+# linearly interpolates the mean prior and pressure profile to the new vertical grid
+################################################################################
+def interpolate_prior_covariance(z,Xa,Sa,Pa,zz,verbose=3,debug=False):
+    k  = len(z)
+    kk = len(zz)
+    kidx  = np.arange(k)
+    kkidx = np.arange(kk)
+        # Pull out the mean T and Q profiles from Xa
+    meanT = Xa[kidx]
+    meanQ = Xa[k+kidx]
+        # Compute the correlation matrix
+    Ca = np.zeros_like(Sa)
+    for i in range(2*k):
+        for j in range(2*k):
+            Ca[i,j] = Sa[i,j]/(np.sqrt(Sa[i,i])*np.sqrt(Sa[j,j]))
+        # Interpolate this correlation matrix to the new height grid
+    if(verbose >= 2):
+        print('    Computing prior correlation matrix to the new grid')
+    newCa = np.zeros((2*kk,2*kk))
+    for i in range(kk):
+        j = np.where(z >= zz[i])[0]
+        if j[0] == 0:
+            j = 1
+        else:
+            j = j[0]
+        wgt = (zz[i]-z[j-1])/(z[j]-z[j-1])
+        newCa[i,kkidx]       = np.interp(zz,z,Ca[j-1,kidx]*(1-wgt)     + wgt*Ca[j,kidx])
+        newCa[kk+i,kk+kkidx] = np.interp(zz,z,Ca[k+j-1,k+kidx]*(1-wgt) + wgt*Ca[k+j,k+kidx])
+        newCa[i,kk+kkidx]    = np.interp(zz,z,Ca[j-1,k+kidx]*(1-wgt)   + wgt*Ca[j,k+kidx])
+        newCa[kk+i,kkidx]    = np.interp(zz,z,Ca[k+j-1,kidx]*(1-wgt)  + wgt*Ca[k+j,kidx])
+            # Ensure that the diagonal of the new correlation matrix is unity
+    for i in range(2*kk):
+        newCa[i,i] = 1
+            # compute the variance vector on the new height grid
+            # and use the same logic to get the new mean vector on this grid
+    varSaT    = np.zeros(len(z))
+    for i in range(k):
+        varSaT[i] = Sa[i,i]
+    newvarSaT = np.interp(zz, z, varSaT)
+    newmeanT  = np.interp(zz, z, meanT)
+    varSaQ    = np.zeros(len(z))
+    for i in range(k):
+        varSaQ[i] = Sa[k+i,k+i]
+    newvarSaQ = np.interp(zz, z, varSaQ)
+    newmeanQ  = np.interp(zz, z, meanQ)
+    newvarSa  = np.append(newvarSaT,newvarSaQ)
+    newXa     = np.append(newmeanT,newmeanQ)
+    newPa     = np.interp(zz, z, Pa)
+
+            # Now rebuild the new covariance matrix
+    if(verbose >= 2):
+        print('    Rebuilding prior covariance matrix on the new grid')
+    newSa = np.zeros_like(newCa)
+    for i in range(2*kk):
+        for j in range(2*kk):
+            newSa[i,j] = newCa[i,j] * np.sqrt(newvarSa[i])*np.sqrt(newvarSa[j])
+
+            # If the debug option is set, then write out the interpolated prior output
+    if debug == True:
+        print('    Writing the parts generated from interpolate_prior_covariance()')
+        Output_Functions.write_variable(Sa,'/data/origSa.cdf')
+        Output_Functions.write_variable(Ca,'/data/origCa.cdf')
+        Output_Functions.write_variable(newCa,'/data/newCa.cdf')
+        Output_Functions.write_variable(newSa,'/data/newSa.cdf')
+        Output_Functions.write_variable(z,'/data/z.cdf')
+        Output_Functions.write_variable(zz,'/data/newz.cdf')
+        Output_Functions.write_variable(Xa,'/data/oXa.cdf')
+        Output_Functions.write_variable(newXa,'/data/nXa.cdf')
+
+    return newXa, newSa, newPa

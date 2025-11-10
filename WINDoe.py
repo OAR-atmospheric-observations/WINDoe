@@ -144,6 +144,37 @@ z = fid.variables['height'][:]
 Xa = np.array(fid.variables['mean_prior'][:])
 Sa = np.array(fid.variables['covariance_prior'][:])
 
+# B. Adler: Interpolate the input prior to the new specified height grid (zgrid), logic is the same as in TROPoe
+# the new height grid should not be too different (much higher vertical resolution) from the prior height grid, to avoid numerical instabilities
+# TO DO: add improved check to prevent the user from entering too different zgrid
+zz = vip['zgrid']
+zz = np.array(zz).astype(float)
+if Other_functions.test_monotonic(zz) == False:
+    print('Error: The input vip.zgrid is not strictly monotonically ascending -- aborting')
+    VIP_Databases_functions.abort(date)
+    sys.exit()
+if zz[0] != 0:
+    print('Error: The first level of the input vip.zgrid is not zero (a requirement) -- aborting')
+    VIP_Databases_functions.abort(date)
+    sys.exit()
+if np.max(zz) >= np.max(z):
+    print(f'Error: The maximum height in the input vip.grid must be less than {np.max(z):.3f} km')
+    VIP_Databases_functions.abort(date)
+    sys.exit()
+if np.median(np.diff((zz))) < np.median(np.diff(z)):
+    print(f'Error: The required vertical grid has a much higher vertical resolution than the prior == aborting')
+    VIP_Databases_functions.abort(date)
+    sys.exit()
+if(verbose >= 2):
+    print('  Adjusting prior to the defined vertical grid')
+newXa,newSa,_ = Other_functions.interpolate_prior_covariance(z,Xa,Sa,np.full(z.shape,np.nan),zz,verbose=verbose)
+
+# Replace the prior values from the input file with the values on the input zgrid
+z  = zz
+Xa = newXa
+Sa = newSa
+
+
 # Add in the prior information for w
 Xa = np.append(Xa,np.zeros(len(z)))
 temp_zeros = np.zeros((len(z)*2,len(z)))
@@ -152,7 +183,6 @@ temp_Sa = np.append(Sa,temp_zeros.T,axis = 0)
 Sa = np.append(temp_Sa,np.append(temp_zeros,temp_wcov,axis = 0),axis=1)
 
 sig_Xa = np.sqrt(np.diag(Sa))
-
 
 z2 = np.append(z,z)
 
@@ -174,11 +204,11 @@ if verbose == 3:
 fid.close()
 
 
+
 if verbose >= 1:
-    print('Retrived profiles will have ' + str(len(z)) + ' levels (from prior)')
+    print('Retrived profiles will have ' + str(len(z)) + ' levels (from vipfile)')
 if verbose >= 2:
     print('There were ' + str(nsonde_prior) + ' radiosondes used in the calculation of the prior')
-
 # TODO -- Add inflate prior covariance function here
 
 if ehour < 0:
@@ -294,7 +324,7 @@ for i in range(len(rtime)):
         windoe['valid'] = 0
     
     # There needs to be some type of observational data
-    if ((len(raw_foo) == 0) & (len(proc_foo) == 0) & (len(insitu_foo) == 0) & (prof_cons['valid'] == 0) &
+    if ((len(raw_foo) == 0) & (len(proc_foo) == 0) & (len(insitu_foo) == 0) & (len(prof_cons) == 0) &
         (len(prof_foo) == 0) & (copter['valid'] == 0)):
         print('Sample ' + str(i) + ' at ' + str(rtime_hour[i]) + ' UTC -- no valid data found.')
         continue
@@ -326,7 +356,8 @@ for i in range(len(rtime)):
     # Also need to keep track of dimensions (elevation, azimuths, height, range, etc.)
     # For raw lidar data height will be range to keep the number of arrays I need to a minimum
     # Processed lidar data will get misssing values for elevatin and azimuth
-    
+    # keep all observations and dims (even missing ones) in separate arrays to save to output file
+
     Y = []
     Sy = []
     sigY = []
@@ -334,6 +365,7 @@ for i in range(len(rtime)):
     flagY = []
     azY = []
     elY = []
+
     if raw_lidar['success'] > 0:
         for j in range(vip['raw_lidar_number']):
             if raw_lidar['valid'][j] == 1:
@@ -351,7 +383,7 @@ for i in range(len(rtime)):
                 dimY.extend(raw_lidar['z'][foo[0]].ravel())
                 azY.extend((raw_lidar['azimuth'][j][foo[1]]).ravel())
                 elY.extend((raw_lidar['elevation'][j][foo[1]]).ravel())
-                
+  
     if proc_lidar['success'] > 0:
         for j in range(vip['proc_lidar_number']):
             if proc_lidar['valid'][j] == 1:
@@ -371,13 +403,12 @@ for i in range(len(rtime)):
                 dimY.extend(proc_lidar['height'][foo[0]])
                 azY.extend(np.ones(len(proc_lidar['u'][j][foo])).ravel()*-999)
                 elY.extend(np.ones(len(proc_lidar['u'][j][foo])).ravel()*-999)
-                
+ 
         for j in range(vip['proc_lidar_number']):
             if proc_lidar['valid'][j] == 1:
             
                 foo = np.where((proc_lidar['u'][j] >= -500) & (proc_lidar['u_error'][j] >= -500) &
                                (proc_lidar['v'][j] >= -500) & (proc_lidar['v_error'][j] >= -500))
-            
                 if len(foo[0]) == 0:
                     print('Major error when adding proc_lidar data to observation vector. This should not happen!')
                     VIP_Databases_functions.abort(date)
@@ -390,41 +421,43 @@ for i in range(len(rtime)):
                 dimY.extend(proc_lidar['height'][foo[0]])
                 azY.extend(np.ones(len(proc_lidar['v'][j][foo])).ravel()*-999)
                 elY.extend(np.ones(len(proc_lidar['v'][j][foo])).ravel()*-999)
-    
+   
     if prof_cons['success'] > 0:
-        if prof_cons['valid'] == 1:
-            foo = np.where((prof_cons['u'] >= -500) & (prof_cons['u_error'] >= -500) &
-                           (prof_cons['v'] >= -500) & (prof_cons['v_error'] >= -500))
-        
-            if len(foo[0]) == 0:
-                print('Major error when adding consensus wind profiler data to observation vector. This should not happen!')
-                VIP_Databases_functions.abort(date)
-                sys.exit()
-        
-            Y.extend(prof_cons['u'][foo].ravel())
-            sigY.extend(prof_cons['u_error'][foo].ravel())
-            Sy.extend(prof_cons['u_error'][foo].ravel()**2)
-            flagY.extend(np.ones(len(prof_cons['u'][foo].ravel()))*4)
-            dimY.extend(prof_cons['height'][foo[0]])
-            azY.extend(np.ones(len(prof_cons['u'][foo])).ravel()*-999)
-            elY.extend(np.ones(len(prof_cons['u'][foo])).ravel()*-999)
+        for j in range(vip['cons_profiler_number']):
+            if prof_cons['valid'][j] == 1:
+                foo = np.where((prof_cons['u'][j] >= -500) & (prof_cons['u_error'][j] >= -500) &
+                               (prof_cons['v'][j] >= -500) & (prof_cons['v_error'][j] >= -500))
             
-        if prof_cons['valid'] == 1:
-            foo = np.where((prof_cons['u'] >= -500) & (prof_cons['u_error'] >= -500) &
-                           (prof_cons['v'] >= -500) & (prof_cons['v_error'] >= -500))
-        
-            if len(foo[0]) == 0:
-                print('Major error when adding consensus wind profiler data to observation vector. This should not happen!')
-                VIP_Databases_functions.abort(date)
-                sys.exit()
-        
-            Y.extend(prof_cons['v'][foo].ravel())
-            sigY.extend(prof_cons['v_error'][foo].ravel())
-            Sy.extend(prof_cons['v_error'][foo].ravel()**2)
-            flagY.extend(np.ones(len(prof_cons['v'][foo].ravel()))*5)
-            dimY.extend(prof_cons['height'][foo[0]])
-            azY.extend(np.ones(len(prof_cons['v'][foo])).ravel()*-999)
-            elY.extend(np.ones(len(prof_cons['v'][foo])).ravel()*-999)
+                if len(foo[0]) == 0:
+                    print('Major error when adding consensus wind profiler data to observation vector. This should not happen!')
+                    VIP_Databases_functions.abort(date)
+                    sys.exit()
+            
+                Y.extend(prof_cons['u'][j][foo].ravel())
+                sigY.extend(prof_cons['u_error'][j][foo].ravel())
+                Sy.extend(prof_cons['u_error'][j][foo].ravel()**2)
+                flagY.extend(np.ones(len(prof_cons['u'][j][foo].ravel()))*4)
+                dimY.extend(prof_cons['height'][foo[0]])
+                azY.extend(np.ones(len(prof_cons['u'][j][foo])).ravel()*-999)
+                elY.extend(np.ones(len(prof_cons['u'][j][foo])).ravel()*-999)
+
+        for j in range(vip['cons_profiler_number']):
+            if prof_cons['valid'][j] == 1:
+                foo = np.where((prof_cons['u'][j] >= -500) & (prof_cons['u_error'][j] >= -500) &
+                               (prof_cons['v'][j] >= -500) & (prof_cons['v_error'][j] >= -500))
+            
+                if len(foo[0]) == 0:
+                    print('Major error when adding consensus wind profiler data to observation vector. This should not happen!')
+                    VIP_Databases_functions.abort(date)
+                    sys.exit()
+            
+                Y.extend(prof_cons['v'][j][foo].ravel())
+                sigY.extend(prof_cons['v_error'][j][foo].ravel())
+                Sy.extend(prof_cons['v_error'][j][foo].ravel()**2)
+                flagY.extend(np.ones(len(prof_cons['v'][j][foo].ravel()))*5)
+                dimY.extend(prof_cons['height'][foo[0]])
+                azY.extend(np.ones(len(prof_cons['v'][j][foo])).ravel()*-999)
+                elY.extend(np.ones(len(prof_cons['v'][j][foo])).ravel()*-999)
     
     if insitu['success'] > 0:
         for j in range(vip['insitu_number']):
@@ -442,10 +475,10 @@ for i in range(len(rtime)):
                 sigY.extend(insitu['u_error'][j][foo].ravel())
                 Sy.extend(insitu['u_error'][j][foo].ravel()**2)
                 flagY.extend(np.ones(len(insitu['u'][j][foo].ravel()))*6)
-                dimY.extend(insitu['height'][j][foo[0]])
+                dimY.extend(insitu['height'][j][foo].ravel())
                 azY.extend(np.ones(len(insitu['u'][j][foo])).ravel()*-999)
                 elY.extend(np.ones(len(insitu['u'][j][foo])).ravel()*-999)
-                
+
         for j in range(vip['insitu_number']):
             if insitu['valid'][j] == 1:
             
@@ -453,7 +486,7 @@ for i in range(len(rtime)):
                                (insitu['v'][j] >= -500) & (insitu['v_error'][j] >= -500))
             
                 if len(foo[0]) == 0:
-                    print('Major error when adding proc_lidar data to observation vector. This should not happen!')
+                    print('Major error when adding insitu data to observation vector. This should not happen!')
                     VIP_Databases_functions.abort(date)
                     sys.exit()
                     
@@ -461,7 +494,7 @@ for i in range(len(rtime)):
                 sigY.extend(insitu['v_error'][j][foo].ravel())
                 Sy.extend(insitu['v_error'][j][foo].ravel()**2)
                 flagY.extend(np.ones(len(insitu['v'][j][foo].ravel()))*7)
-                dimY.extend(insitu['height'][j][foo[0]])
+                dimY.extend(insitu['height'][j][foo].ravel())
                 azY.extend(np.ones(len(insitu['v'][j][foo])).ravel()*-999)
                 elY.extend(np.ones(len(insitu['v'][j][foo])).ravel()*-999)
 
@@ -588,7 +621,7 @@ for i in range(len(rtime)):
             dimY.extend(copter['height'][foo[0]])
             azY.extend(copter['yaw'][foo].ravel())
             elY.extend(np.ones(len(copter['roll'][foo])).ravel()*-999)
-        
+
     Y = np.array(Y)
     sigY = np.array(sigY)
     flagY = np.array(flagY)
@@ -596,6 +629,7 @@ for i in range(len(rtime)):
     azY = np.array(azY)
     elY = np.array(elY)
 
+     
     zmin = np.nanmin(dimY)
     zmax = np.nanmax(dimY)
     

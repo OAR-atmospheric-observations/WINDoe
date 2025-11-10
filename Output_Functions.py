@@ -5,6 +5,7 @@ import glob
 import sys
 from datetime import datetime, timezone
 from netCDF4 import Dataset
+from collections import Counter
 
 ###############################################################################
 # This file contains the following functions:
@@ -210,22 +211,71 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
             proc_type.comment1 = '1 - CLAMPS VAD'
             proc_type.comment2 = '2 - ARM/NCAR VAD'
 
-        if vip['cons_profiler_type'] > 0:
-            profiler_timedelta = fid.createVariable('wind_profiler_timedelta', 'f4')
+        if vip['cons_profiler_number'] > 0:
+            pdim = fid.createDimension('cons_dim', vip['cons_profiler_number'])
+            profiler_timedelta = fid.createVariable('wind_profiler_timedelta', 'f4',('cons_dim',))
             profiler_timedelta.long_name = 'Time window for wind profiler data to be included in the retrieval'
             profiler_timedelta.units = 'min'
         
-            prof_type = fid.createVariable('wind_profiler_type', 'i2')
+            prof_type = fid.createVariable('wind_profiler_type', 'i2', ('cons_dim',))
             prof_type.long_name = 'Type wind profiler data used'
-            prof_type.comment1 = '1 - 915 Mhz Profiler'
-            prof_type.comment2 = '2 - 449 Mhz Profiler'
+            prof_type.comment1 = '1 - NCAR 449 Mhz Profiler'
+            prof_type.comment2 = '2 - NOAA 915 Mhz Profiler high-res'
+            prof_type.comment2 = '3 - NOAA 915 Mhz Profiler low-res'
         
+        # B. Adler: count how many observations per type are used at each time stamp
+        obsflag_dim = fid.createDimension('obsflag_dim',None)
+        obscount_flag = fid.createVariable('obscount_flag','i2',('time','obsflag_dim',))
+        obscount_flag.long_name = 'Number of different observation types per profile'
+        obscount_flag.comment1 = 'Counts how many observations of a certain platform are used per profile'
+        obsunique_flag = fid.createVariable('obsunique_flag','i2',('time','obsflag_dim',))
+        obsunique_flag.long_name = 'Unique observations per profile'
+        obsunique_flag.comment1 = 'Flags of unique observations per profile'
+
         if vip['keep_file_small'] == 0:
             nht2 = fid.createDimension('nht2', (nht * 2))
             cov = fid.createVariable('cov', 'f4', ('time', 'nht2', 'nht2'))
             cov.long_name = 'Covariance matrix'
-            
-            
+           
+            # B. Adler: in addition to covariance matrix, save observations from individual inputs
+            # save observation vector, etc, if it is not lidar raw data
+            # obsvecidx = np.where(xret['flagY']>1)[0]
+            # save observation vector for all data, can get very large if not averaged
+            obsvecidx = np.where(xret['flagY']>0)[0]
+            if len(obsvecidx)>0:
+                obs_dim = fid.createDimension('obs_dim',None)
+                #obs_dim = fid.createDimension('obs_dim',len(obsvecidx))
+                obs_vector = fid.createVariable('obs_vector','f4',('time','obs_dim'))
+                obs_vector.long_name = 'Observation vector Y'
+                obs_vector.comment1 = 'mixed units -- see obs_flag field above'
+
+                obs_flag = fid.createVariable('obs_flag', 'i2', ('time','obs_dim',))
+                obs_flag.long_name = 'Flag indicating type of observation for each vector element'
+                obs_flag.comment1 = 'unitless'
+
+                obs_dimension = fid.createVariable('obs_dimension', 'f8', ('time','obs_dim',))
+                obs_dimension.long_name = 'Dimension of the observation vector'
+                obs_dimension.comment1 = 'mixed units -- see obs_flag field above'
+
+                obs_vector_uncertainty = fid.createVariable('obs_vector_uncertainty', 'f4', ('time','obs_dim',))
+                obs_vector_uncertainty.long_name = '1-sigma uncertainty in the observation vector (sigY)'
+                obs_vector_uncertainty.comment1 = 'mixed units -- see obs_flag field above'
+
+                forward_calc = fid.createVariable('forward_calc', 'f4', ('time','obs_dim',))
+                forward_calc.long_name = 'Forward calculation from state vector (i.e., F(Xn))'
+                forward_calc.comment1 = 'mixed units -- see obs_flag field above'
+                        
+        # for prior informatoin
+        arb_dim1 = fid.createDimension('arb_dim1',None)
+        Xa = fid.createVariable('Xa', 'f8', ('arb_dim1',))
+        Xa.long_name = 'Prior mean state'
+        Xa.units = 'm/s'
+
+        Sa = fid.createVariable('Sa', 'f8', ('arb_dim1','arb_dim1',))
+        Sa.long_name = 'Prior covariance'
+        Sa.units = 'm2/s2'
+
+
         # These should be the last three variables in the file
         lat = fid.createVariable('lat', 'f4')
         lat.long_name = 'latitude'
@@ -248,8 +298,8 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
         fid.Number_raw_lidar_sources = vip['raw_lidar_number']
         fid.Number_proc_lidar_sources = vip['proc_lidar_number']
         fid.shour = shour
-        if vip['cons_profiler_type'] > 0:
-            fid.Number_wind_profiler_sources = 1
+        if vip['cons_profiler_number'] > 0:
+            fid.Number_wind_profiler_sources = vip['cons_profiler_number']
         else:
             fid.Number_wind_profiler_sources = 0
         fid.Total_clock_execution_time_in_s = exectime
@@ -264,14 +314,18 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
         if vip['proc_lidar_number'] > 0:
             proc_timedelta = np.array(vip['proc_lidar_timedelta'])
             proc_type = np.array(vip['proc_lidar_type'])
-        if vip['cons_profiler_type'] > 0:
-            profiler_timedelta[:] = vip['cons_profiler_timedelta']
-            prof_type[:] = vip['cons_profiler_type']
+        if vip['cons_profiler_number'] > 0:
+            profiler_timedelta = np.array(vip['cons_profiler_timedelta'])
+            prof_type = np.array(vip['cons_profiler_type'])
         
+        Xa[:] = prior['Xa']
+        Sa[:,:] = prior['Sa']
+
         lat[:] = vip['station_lat']
         lon[:] = vip['station_lon']
         alt[:] = vip['station_alt']
-        
+
+                
         fid.close()
     
     # Now append the sample from xret into the file
@@ -369,10 +423,46 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
             max_hgt = fid.variables[f'{i}_hgt_max']
             max_hgt[fsample] = xret['max_heights'][i]
     
+    # B. Adler: save how many obs per type were used 
+    c = Counter(xret['flagY'])
+    obsflagunique = np.unique(xret['flagY'])
+    obsflagcount = np.full((len(obsflagunique)),np.nan)
+    for i in range(len(obsflagunique)): 
+        obsflagcount[i]=c[obsflagunique[i]]
+    obscount_flag = fid.variables['obscount_flag']
+    obscount_flag[fsample,:] = obsflagcount
+    obsunique_flag = fid.variables['obsunique_flag']
+    obsunique_flag[fsample,:] = obsflagunique
+
+
     # only add the covariance matrix if specified
     if vip['keep_file_small'] == 0:
         cov = fid.variables['cov']
         cov[fsample,:,:] = xret['Sop'][:2*nht,:2*nht]
+        
+        # savee observations from each input
+        if all(vip['raw_lidar_average_rv']) == 1:
+            # for all obs
+            obsvecidx = np.where(xret['flagY']>0)[0]
+        else:
+            # save observation vector and unertainty, for everything but raw lidar data
+            # obsvecidx = np.where(xret['flagY']>1)[0]
+            # save observation vector for all data, can get very large if not averaged
+            obsvecidx = np.where(xret['flagY']>0)[0]
+
+        if len(obsvecidx)>0:
+            obs_vector = fid.variables['obs_vector']
+            obs_vector[fsample,:] = xret['Y'][obsvecidx]
+            obs_vector_uncertainty = fid.variables['obs_vector_uncertainty']
+            obs_vector_uncertainty[fsample,:] = xret['sigY'][obsvecidx]
+            obs_flag = fid.variables['obs_flag']
+            obs_flag[fsample,:] = xret['flagY'][obsvecidx]
+            obs_dimension = fid.variables['obs_dimension']
+            obs_dimension[fsample,:] = xret['dimY'][obsvecidx]
+            forward_calc = fid.variables['forward_calc']
+            forward_calc[fsample,:] = xret['FXn'][obsvecidx]
+            
+
     
     fid.close()
     
