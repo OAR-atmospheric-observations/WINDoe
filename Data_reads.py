@@ -2675,7 +2675,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
             for i in range(len(dates)):
                 files = files + \
                     sorted(glob.glob(vip['insitu_paths'][k] +
-                           '/' + '*mwr*' + dates[i] + '*.cdf'))
+                           '/' + '*mwr*' + dates[i] + '*.nc'))
 
             if len(files) == 0:
                 if verbose >= 1:
@@ -2767,7 +2767,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
             for i in range(len(dates)):
                 files = files + \
                     sorted(glob.glob(vip['insitu_paths']
-                           [k] + '/' + '*' + dates[i] + '*.nc'))
+                           [k] + '/' + '*grid*' + dates[i] + '*.nc'))
 
             files.sort()
             if len(files) == 0:
@@ -2783,12 +2783,16 @@ def read_insitu(date, retz, rtime, vip, verbose):
                     bt = fid.variables['base_time'][0]
                     to = fid.variables['time_offset'][0]
 
-                    z = fid.variables['height'][:]/1000.
-                    ux = fid.variables['u'][:]
-                    vx = fid.variables['v'][:]
+                    z = fid.variables['height'][:]
+                    ux = fid.variables['u_wind'][:]
+                    vx = fid.variables['v_wind'][:]
 
-                    ux_sigma = np.ones_like(z) * 5
-                    vx_sigma = np.ones_like(z) * 5
+                    if "sigma_u" in fid.variables:
+                        ux_sigma = fid.variables['sigma_u'][:]
+                        vx_sigma = fid.variables['sigma_v'][:]
+                    else:
+                        ux_sigma = np.ones_like(z) * 5
+                        vx_sigma = np.ones_like(z) * 5
 
                     fid.close()
                     
@@ -2914,12 +2918,18 @@ def read_insitu(date, retz, rtime, vip, verbose):
                                 print('No valid sounding data found')
 
                         foo = np.where((retz < vip['insitu_minalt'][k]) |
-                                   (retz > vip['insitu_maxalt'][k]))
+                                   (retz > vip['insitu_maxalt'][k]))[0]
 
-                        u_interp[foo] = -999.
-                        v_interp[foo] = -999.
-                        uerr_interp[foo] = -999.
-                        verr_interp[foo] = -999.
+                        u_interp[:,foo] = -999.
+                        v_interp[:,foo] = -999.
+                        uerr_interp[:,foo] = -999.
+                        verr_interp[:,foo] = -999.
+
+                        # Make these 1d
+                        u_interp = np.squeeze(u_interp)
+                        v_interp = np.squeeze(v_interp)
+                        uerr_interp = np.squeeze(uerr_interp)
+                        verr_interp = np.squeeze(verr_interp)
                 else:
                     print('No sounding data for retrieval at this time')
                     u_interp = None
@@ -3210,7 +3220,7 @@ def read_insitu(date, retz, rtime, vip, verbose):
         # of the replicates the same as the original, so I will insert 1/10th of
         # the random error into the time-series...
         
-        if not u_interp == None and len(u_interp) > 0 and vip['insitu_type'][k]<3:
+        if u_interp.any() and len(u_interp) > 0 and vip['insitu_type'][k]<3:
             print('replicate insitu surface value '+str(vip['insitu_npts'][k])+ ' times')
             vip['insitu_type'][k]
             u1 = np.zeros((int(vip['insitu_npts'][k]),len(u_interp)))

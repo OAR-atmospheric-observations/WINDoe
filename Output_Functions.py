@@ -166,6 +166,14 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
         srh3 = fid.createVariable('srh_3km', 'f4', ('time',))
         srh3.long_name = '0-3 km storm relative helicity'
         srh3.units = 'm^2/s^2'
+
+        shear1 = fid.createVariable('shear_1km', 'f4', ('time',))
+        shear1.long_name = '0-1 km bulk shear'
+        shear1.units = 'm/s'
+        
+        shear3 = fid.createVariable('shear_3km', 'f4', ('time',))
+        shear3.long_name = '0-3 km bulk shear'
+        shear3.units = 'm/s'
         
         sigma_srh1 = fid.createVariable('sigma_srh_1km', 'f4', ('time',))
         sigma_srh1.long_name = '1-sigma uncertainty for 0-1 km storm relative helicity'
@@ -174,7 +182,15 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
         sigma_srh3 = fid.createVariable('sigma_srh_3km', 'f4', ('time',))
         sigma_srh3.long_name = '1-sigma uncertainty for 0-3 km storm relative helicity'
         sigma_srh3.units = 'm^2/s^2'
+
+        sigma_shear1 = fid.createVariable('sigma_shear_1km', 'f4', ('time',))
+        sigma_shear1.long_name = '1-sigma uncertainty for 0-1 km bulk shear'
+        sigma_shear1.units = 'm/s'
         
+        sigma_shear3 = fid.createVariable('sigma_shear_3km', 'f4', ('time',))
+        sigma_shear3.long_name = '1-sigma uncertainty for 0-3 km bulk shea'
+        sigma_shear3.units = 'm/s'
+
         obs_max = fid.createVariable('obs_hgt_max', 'f4', ('time',))
         obs_max.long_name = 'Height of highest observation'
         obs_max.units = 'km'
@@ -367,8 +383,12 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
     cdfs_w = fid.variables['cdfs_W']
     srh1 = fid.variables['srh_1km']
     srh3 = fid.variables['srh_3km']
+    shear1 = fid.variables['shear_1km']
+    shear3 = fid.variables['shear_3km']
     sigma_srh1 = fid.variables['sigma_srh_1km']
     sigma_srh3 = fid.variables['sigma_srh_3km']
+    sigma_shear1 = fid.variables['sigma_shear_1km']
+    sigma_shear3 = fid.variables['sigma_shear_3km']
     obs_max = fid.variables['obs_hgt_max']
     obs_min = fid.variables['obs_hgt_min']
     
@@ -412,8 +432,12 @@ def write_output(vip, globatt, xret, dindices, prior, fsample, exectime, nfilena
     cdfs_w[fsample,:] = xret['cdfs'][2,:]
     srh1[fsample] = dindices['indices'][0]
     srh3[fsample] = dindices['indices'][1]
+    shear1[fsample] = dindices['indices'][2]
+    shear3[fsample] = dindices['indices'][3]
     sigma_srh1[fsample] = dindices['sigma_indices'][0]
     sigma_srh3[fsample] = dindices['sigma_indices'][1]
+    sigma_shear1[fsample] = dindices['sigma_indices'][2]
+    sigma_shear3[fsample] = dindices['sigma_indices'][3]
     foo = np.where((((xret['flagY'] < 8) | (xret['flagY'] > 11)) & (xret['sigY'] < 50)))[0]
     obs_max[fsample] = np.nanmax(xret['dimY'][foo])
     obs_min[fsample] = np.nanmin(xret['dimY'][foo])

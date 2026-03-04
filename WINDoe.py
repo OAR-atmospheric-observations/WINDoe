@@ -148,31 +148,33 @@ Sa = np.array(fid.variables['covariance_prior'][:])
 # the new height grid should not be too different (much higher vertical resolution) from the prior height grid, to avoid numerical instabilities
 # TO DO: add improved check to prevent the user from entering too different zgrid
 zz = vip['zgrid']
-zz = np.array(zz).astype(float)
-if Other_functions.test_monotonic(zz) == False:
-    print('Error: The input vip.zgrid is not strictly monotonically ascending -- aborting')
-    VIP_Databases_functions.abort(date)
-    sys.exit()
-if zz[0] != 0:
-    print('Error: The first level of the input vip.zgrid is not zero (a requirement) -- aborting')
-    VIP_Databases_functions.abort(date)
-    sys.exit()
-if np.max(zz) >= np.max(z):
-    print(f'Error: The maximum height in the input vip.grid must be less than {np.max(z):.3f} km')
-    VIP_Databases_functions.abort(date)
-    sys.exit()
-if np.median(np.diff((zz))) < np.median(np.diff(z)):
-    print(f'Error: The required vertical grid has a much higher vertical resolution than the prior == aborting')
-    VIP_Databases_functions.abort(date)
-    sys.exit()
-if(verbose >= 2):
-    print('  Adjusting prior to the defined vertical grid')
-newXa,newSa,_ = Other_functions.interpolate_prior_covariance(z,Xa,Sa,np.full(z.shape,np.nan),zz,verbose=verbose)
+# Added ability to skip regridding the prior.
+if zz[0] > 0:
+    zz = np.array(zz).astype(float)
+    if Other_functions.test_monotonic(zz) == False:
+        print('Error: The input vip.zgrid is not strictly monotonically ascending -- aborting')
+        VIP_Databases_functions.abort(date)
+        sys.exit()
+    if zz[0] != 0:
+        print('Error: The first level of the input vip.zgrid is not zero (a requirement) -- aborting')
+        VIP_Databases_functions.abort(date)
+        sys.exit()
+    if np.max(zz) >= np.max(z):
+        print(f'Error: The maximum height in the input vip.grid must be less than {np.max(z):.3f} km')
+        VIP_Databases_functions.abort(date)
+        sys.exit()
+    if np.median(np.diff((zz))) < np.median(np.diff(z)):
+        print(f'Error: The required vertical grid has a much higher vertical resolution than the prior == aborting')
+        VIP_Databases_functions.abort(date)
+        sys.exit()
+    if(verbose >= 2):
+        print('  Adjusting prior to the defined vertical grid')
+    newXa,newSa,_ = Other_functions.interpolate_prior_covariance(z,Xa,Sa,np.full(z.shape,np.nan),zz,verbose=verbose)
 
-# Replace the prior values from the input file with the values on the input zgrid
-z  = zz
-Xa = newXa
-Sa = newSa
+    #   Replace the prior values from the input file with the values on the input zgrid
+    z  = zz
+    Xa = newXa
+    Sa = newSa
 
 
 # Add in the prior information for w

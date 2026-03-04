@@ -371,13 +371,31 @@ def compute_srh(u_winds,v_winds,storm_motion, z, z_top):
     
     srh = np.sum(integral)
     
-    return srh  
+    return srh
 
+def compute_bulk_shear(u_winds, v_winds, z, z_top):
+
+    # Check to make sure the data goes high enough
+
+    max_z = np.nanmax(z)
+
+    if max_z < z_top:
+        return -9999.
+    
+    # Interpolate to z_top
+
+    u_top = np.interp(z_top, z, u_winds)
+    v_top = np.interp(z_top, z, v_winds)
+
+    bulk_shear = np.sqrt((u_top-u_winds[0])**2 + (v_top-v_winds[0])**2)
+
+    return bulk_shear
+    
 def compute_dindices(xret, vip, num_mc=20):
     
-    dindex_name = ['srh_1km', 'srh_3km']
+    dindex_name = ['srh_1km', 'srh_3km', 'shear_1km', 'shear_3km']
     
-    dindex_units = ['m^2/s^2', 'm^2/s^2']
+    dindex_units = ['m^2/s^2', 'm^2/s^2', 'm/s', 'm/s']
     
     indices = np.zeros(len(dindex_name))
     sigma_indices = np.zeros(len(dindex_name))
@@ -410,6 +428,12 @@ def compute_dindices(xret, vip, num_mc=20):
     else:
         indices[1] = compute_srh(u_wind, v_wind, storm_motion,z,3)
     
+    # 1km bulk shear
+    indices[2] = compute_bulk_shear(u_wind, v_wind, z, 1)
+
+    # 3km bulk shear
+    indices[3] = compute_bulk_shear(u_wind, v_wind, z, 3)
+
     # Only compute the uncertainties in the indices if the number of Monte Carlo 
     # samples is strictly positive; otherwise, return -9999 as the uncertainties
     if num_mc <= 0:
@@ -428,6 +452,8 @@ def compute_dindices(xret, vip, num_mc=20):
         # allocate room to compute the indices for the various profiles in the MC sampling
         tmp_srh1 = np.zeros(num_mc)
         tmp_srh3 = np.zeros(num_mc)
+        tmp_shear1 = np.zeros(num_mc)
+        tmp_shear3 = np.zeros(num_mc)
         
         for j in range(num_mc):
             
@@ -441,7 +467,10 @@ def compute_dindices(xret, vip, num_mc=20):
             else:
                 tmp_srh1[j] = compute_srh(uprofs[:,j],vprofs[:,j],tmp_storm_motion,z,1)
                 tmp_srh3[j] = compute_srh(uprofs[:,j],vprofs[:,j],tmp_storm_motion,z,3)
-        
+            
+            tmp_shear1[j] = compute_bulk_shear(uprofs[:,j],vprofs[:,j],z,1)
+            tmp_shear3[j] = compute_bulk_shear(uprofs[:,j],vprofs[:,j],z,3)
+
         # srh1
         foo = np.where(tmp_srh1 > -9000)[0]
         if ((len(foo) > 1) & (indices[0] > -9000)):
@@ -455,6 +484,20 @@ def compute_dindices(xret, vip, num_mc=20):
             sigma_indices[1] = np.nanstd(indices[1]-tmp_srh3[foo])
         else:
             sigma_indices[1] = -9999.
+        
+        # shear1
+        foo = np.where(tmp_shear1 > -9000)[0]
+        if ((len(foo) > 1) & (indices[2] > -9000)):
+            sigma_indices[2] = np.nanstd(indices[2]-tmp_shear1[foo])
+        else:
+            sigma_indices[2] = -9999.
+        
+        # shear3
+        foo = np.where(tmp_shear3 > -9000)[0]
+        if ((len(foo) > 1) & (indices[3] > -9000)):
+            sigma_indices[3] = np.nanstd(indices[3]-tmp_shear3[foo])
+        else:
+            sigma_indices[3] = -9999.
     
     return {'indices':indices, 'sigma_indices':sigma_indices, 'name':dindex_name,
             'units':dindex_units}
