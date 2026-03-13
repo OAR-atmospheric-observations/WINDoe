@@ -2925,11 +2925,12 @@ def read_insitu(date, retz, rtime, vip, verbose):
                         uerr_interp[:,foo] = -999.
                         verr_interp[:,foo] = -999.
 
-                        # Make these 1d
-                        u_interp = np.squeeze(u_interp)
-                        v_interp = np.squeeze(v_interp)
-                        uerr_interp = np.squeeze(uerr_interp)
-                        verr_interp = np.squeeze(verr_interp)
+                    # Make these 1d
+                    u_interp = np.squeeze(u_interp)
+                    v_interp = np.squeeze(v_interp)
+                    uerr_interp = np.squeeze(uerr_interp)
+                    verr_interp = np.squeeze(verr_interp)
+
                 else:
                     print('No sounding data for retrieval at this time')
                     u_interp = None
