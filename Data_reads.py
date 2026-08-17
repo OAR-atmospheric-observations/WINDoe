@@ -3,6 +3,7 @@ import glob
 from scipy import interpolate
 from netCDF4 import Dataset
 import calendar
+import cftime
 from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
 
@@ -746,9 +747,11 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
             else:
                 for i in range(len(files)):
                     fid = Dataset(files[i], 'r')
+                    
+                    fid = Dataset(files[i], 'r')
                     bt = fid.variables['base_time'][0]
                     to = fid.variables['time_offset'][:]
-
+                    
                     foo = np.where((bt+to >= rtime-((vip['raw_lidar_timedelta'][k]/2.)*60)) &
                                    (bt+to < rtime+((vip['raw_lidar_timedelta'][k]/2.)*60)))[0]
 
@@ -846,7 +849,150 @@ def read_raw_lidar(date, retz, rtime, vip, verbose):
                     vr_varzz = np.ones((len(elxx), len(retz)))*-999
 
                     for ii in range(len(elxx)):
-                        hgt = rngxx*np.sin(np.deg2rad(elxx[ii]))
+                        hgt = rngxx*np.sin(np.deg2rad(elxx[ii])) + vip['raw_lidar_altitude'][k]
+                        vrzz[ii, :] = np.interp(
+                            retz, hgt, vrxx[ii, :], left=-999, right=-999)
+
+                    temp_sig, thresh_sig = Other_functions.wind_estimate(
+                        vrzz, elxx, azxx, retz,vip['raw_lidar_eff_N'], vip['raw_lidar_sig_thresh'])
+                    vr_varzz[:, :] = temp_sig[None, :]
+
+                    foo = np.where(vr_varzz > 90000)
+                    vrzz[foo] = -999
+                    
+                    vrxx = np.copy(vrzz)
+                    vr_varxx = np.copy(vr_varzz)
+
+                    vrxx[np.isnan(vrxx)] = -999
+                    vr_varxx[np.isnan(vr_varxx)] = -999
+
+                    vrxx = vrxx.T
+                    vr_varxx = vr_varxx.T
+
+                    foo = np.where((vrxx != -999) & (vr_varxx < 3000))[0]
+                    if len(foo) > 0:
+                        available[k] = 1
+                    else:
+                        print('No valid ARM lidar data found')
+
+                else:
+                    print('No raw ARM CSM data for retrieval at this time')
+                    lsecsx = None
+                    rngxx = None
+                    azxx = None
+                    elxx = None
+                    vrxx = None
+                    vr_varxx = None
+        
+        if vip['raw_lidar_type'][k] == 6:
+            if verbose >= 1:
+                print('Reading in unprocessed MetroWeather lidar file')
+
+            dates = [(datetime.strptime(str(date), '%Y%m%d') - timedelta(days=1)).strftime('%Y%m%d'),
+                     str(date),  (datetime.strptime(str(date), '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')]
+
+            files = []
+            for i in range(len(dates)):
+                for j in range(len(cdf)):
+                    files = files + \
+                        sorted(
+                            glob.glob(vip['raw_lidar_paths'][k] + '/*lidar*' + dates[i] + '*.' + cdf[j]))
+            if len(files) == 0:
+                if verbose >= 1:
+                    print(
+                        'No MetroWeather lidar files found in this directory for this date')
+                lsecsx = None
+                rngxx = None
+                azxx = None
+                elxx = None
+                vrxx = None
+                vr_varxx = None
+            else:
+                for i in range(len(files)):
+                    fid = Dataset(files[i], 'r')
+                    time_var = fid.variables["time"]
+
+                    epoch_str = time_var.units.replace("seconds since ", "")
+                    epoch = datetime.fromisoformat(epoch_str).replace(tzinfo=timezone.utc)
+
+                    unix_epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+                    btto = np.array([
+                        (epoch - unix_epoch).total_seconds() + t for t in time_var[:]
+                        ])
+
+                    foo = np.where((btto >= rtime-((vip['raw_lidar_timedelta'][k]/2.)*60)) &
+                                   (btto < rtime+((vip['raw_lidar_timedelta'][k]/2.)*60)))[0]
+
+                    # There are no times we want here so just move on
+                    if len(foo) == 0:
+                        fid.close()
+                        continue
+
+                    rngx = fid.variables['range'][:]/1000.
+                    azx = fid.variables['azimuth'][:]
+                    elx = fid.variables['elevation'][:]
+                    vrx = fid.variables['VR_OU'][:, :]
+                    snrx = fid.variables['SNR_OU'][:,:]
+
+                    fid.close()
+
+                    if no_data:
+                        lsecsx = btto[foo]
+                        rngxx = np.array([rngx]*len(btto[foo]))
+                        azxx = azx[foo]
+                        elxx = elx[foo]
+                        vrxx = vrx[foo, :]
+                        snrxx = snrx[foo, :]
+                        no_data = False
+
+                    else:
+
+                        # Check to make sure the range array is the same length
+                        # and azimuth and elevation are the same. If not
+                        # abort and tell user
+
+                        if (len(rngx) != len(rngxx[0])):
+                            print('Error: Raw lidar data source ' + str(k+1) +
+                                  ' changed during period retrieval period')
+                            continue
+                        
+                        lsecsx = np.append(lsecsx, btto[foo])
+                        rngxx = np.append(rngxx, np.array(
+                            [rngx]*len(btto[foo])), axis=0)
+                        azxx = np.append(azxx, azx[foo])
+                        elxx = np.append(elxx, elx[foo])
+                        vrxx = np.append(vrxx, vrx[foo], axis=0)
+                        snrxx = np.append(snrxx, snrx[foo], axis=0)
+
+                if not no_data:
+
+                    # Set the vr variance to a constant value
+
+                    rngxx = rngxx[0]
+
+                    # We only want to use data that falls in our snr bounds
+
+                    foo = np.where((snrxx < vip['raw_lidar_minsnr'][k]) |
+                                   (snrxx > vip['raw_lidar_maxsnr'][k]))
+
+                    vrxx[foo] = np.nan
+                    snrxx[foo] = np.nan
+
+                    # We only want to use data between min range and max range so set
+                    # everything else to missing
+
+                    foo = np.where((rngxx < vip['raw_lidar_minrng'][k]) |
+                                   (rngxx > vip['raw_lidar_maxrng'][k]))[0]
+
+                    vrxx[:, foo] = np.nan
+
+                    # Now interpolate to the heights of the retrieval
+                    vrzz = np.ones((len(elxx), len(retz)))*-999
+                    vr_varzz = np.ones((len(elxx), len(retz)))*-999
+
+                    for ii in range(len(elxx)):
+                        hgt = rngxx*np.sin(np.deg2rad(elxx[ii])) + vip['raw_lidar_altitude'][k]
                         vrzz[ii, :] = np.interp(
                             retz, hgt, vrxx[ii, :], left=-999, right=-999)
 

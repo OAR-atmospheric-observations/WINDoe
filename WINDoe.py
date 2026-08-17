@@ -385,6 +385,7 @@ for i in range(len(rtime)):
                 dimY.extend(raw_lidar['z'][foo[0]].ravel())
                 azY.extend((raw_lidar['azimuth'][j][foo[1]]).ravel())
                 elY.extend((raw_lidar['elevation'][j][foo[1]]).ravel())
+
   
     if proc_lidar['success'] > 0:
         for j in range(vip['proc_lidar_number']):
@@ -1132,7 +1133,7 @@ for i in range(len(rtime)):
         # loop through the different obs types
         for t in range(len(dtypes)):
             # find where the data of this type exists
-            foo = np.where(np.in1d(flagY, dtypes[t]))[0]
+            foo = np.where(np.isin(flagY, dtypes[t]))[0]
 
             # if there is no data, move forward
             if len(foo) == 0:
